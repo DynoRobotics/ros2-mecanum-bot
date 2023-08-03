@@ -18,7 +18,7 @@ namespace debict
     {
         namespace controller
         {
-            using Twist = geometry_msgs::msg::TwistStamped;
+            using Twist = geometry_msgs::msg::Twist;
 
             class MecanumbotDriveController
                 : public controller_interface::ControllerInterface
