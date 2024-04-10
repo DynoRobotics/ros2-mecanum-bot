@@ -17,6 +17,7 @@ using namespace debict::mecanumbot::hardware;
 
 hardware_interface::CallbackReturn MecanumbotHardware::on_init(const hardware_interface::HardwareInfo & hardware_info)
 {
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "on_init");
     hardware_interface::CallbackReturn baseResult = hardware_interface::SystemInterface::on_init(hardware_info);
     if (baseResult != hardware_interface::CallbackReturn::SUCCESS) {
         return baseResult;
@@ -123,11 +124,12 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_
         velocity_commands_saved_[i] = velocity_commands_[i];
     }
 
-    serial_port_ = std::make_shared<MecanumbotSerialPort>();
-    if (serial_port_->open(serial_port_name_) != return_type::SUCCESS) {
-        RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware failed to open serial port");
-        return hardware_interface::CallbackReturn::ERROR;
-    }
+    // TODO: Open the serial port
+    // serial_port_ = std::make_shared<MecanumbotSerialPort>();
+    // if (serial_port_->open(serial_port_name_) != return_type::SUCCESS) {
+    //     RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware failed to open serial port");
+    //     return hardware_interface::CallbackReturn::SUCCESS;
+    // }
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware started");
     return hardware_interface::CallbackReturn::SUCCESS;
@@ -137,10 +139,11 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_deactivate(const rclcp
 {
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware stopping ...");
 
-    if (serial_port_->is_open()) {
-        serial_port_->close();
-        serial_port_.reset();
-    }
+    // TODO: Close the serial port
+    // if (serial_port_->is_open()) {
+    //     serial_port_->close();
+    //     serial_port_.reset();
+    // }
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware stopped");
     return hardware_interface::CallbackReturn::SUCCESS;
@@ -148,60 +151,74 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_deactivate(const rclcp
 
 hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & time, const rclcpp::Duration & period)
 {
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Reading from serial port ...");
+    
+    // // Make sure we are connected to the serial port
+    // // if (!serial_port_->is_open()) {
+    // //     RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware not connected to serial port");
+    // //     return hardware_interface::return_type::ERROR;
+    // // }
 
-    // We currently have an ack response, so read the frames
-    std::vector<SerialHdlcFrame> frames;
-    serial_port_->read_frames(frames);
+    // // // We currently have an ack response, so read the frames
+    // // std::vector<SerialHdlcFrame> frames;
+    // // serial_port_->read_frames(frames);
 
-    /*
-    for (size_t i = 0; i < frames.size(); i++) {
-        char buff[100];
-        int offset = 0;
-        for (size_t l = 0; l < frames[i].length; l++) {
-            sprintf(&buff[offset], "%02X ", frames[i].data[l]);
-            offset += 3;
-        }
-        RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Frame received: %s", buff);
-    }
-    */
+    // /*
+    // for (size_t i = 0; i < frames.size(); i++) {
+    //     char buff[100];
+    //     int offset = 0;
+    //     for (size_t l = 0; l < frames[i].length; l++) {
+    //         sprintf(&buff[offset], "%02X ", frames[i].data[l]);
+    //         offset += 3;
+    //     }
+    //     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Frame received: %s", buff);
+    // }
+    // */
 
-    for (size_t i = 0; i < info_.joints.size(); i++) {
-        //RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Got position %.5f, velocity %.5f for joint %d!", position_states_[i], velocity_states_[i], i);
-    }
-    position_states_[0] = 1.1f;
+    // // for (size_t i = 0; i < info_.joints.size(); i++) {
+    // //     //RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Got position %.5f, velocity %.5f for joint %d!", position_states_[i], velocity_states_[i], i);
+    // // }
+
+    // position_states_[0] = 1.1f;
+
     return hardware_interface::return_type::OK;
 }
 
 hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & time, const rclcpp::Duration & period)
 {
-    for (size_t i = 0; i < info_.joints.size(); i++) {
-        // Only send motor commands if the velocity changed
-        if (velocity_commands_[i] != velocity_commands_saved_[i]) {
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Writing to serial port ...");
 
-            RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Motor velocity changed: %.5f", velocity_commands_[i]);
+    // for (size_t i = 0; i < info_.joints.size(); i++) {
+    //     // Only send motor commands if the velocity changed
+    //     if (velocity_commands_[i] != velocity_commands_saved_[i]) {
 
-            // Generate the motor command message
-            uint16_t duty = 0;
-            uint8_t message[6];
-            message[0] = (uint8_t)DeviceCommand::MotorSetDuty;
-            message[1] = 4; // Payload len
-            message[2] = motor_ids_[i];
-            if (velocity_commands_[i] >= 0.0) {
-                duty = (uint16_t)(velocity_commands_[i]);
-                message[3] = (uint8_t)DeviceMotorDirection::Forward;
-            } else {
-                duty = (uint16_t)(-velocity_commands_[i]);
-                message[3] = (uint8_t)DeviceMotorDirection::Reverse;
-            }
-            message[4] = (uint8_t)(duty & 0xFF);
-            message[5] = (uint8_t)((duty >> 8) & 0xFF);
+    //         RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Motor velocity changed: %.5f", velocity_commands_[i]);
 
-            // Send the motor command
-            serial_port_->write_frame(message, 6);
+    //         // Generate the motor command message
+    //         uint16_t duty = 0;
+    //         uint8_t message[6];
+    //         message[0] = (uint8_t)DeviceCommand::MotorSetDuty;
+    //         message[1] = 4; // Payload len
+    //         message[2] = motor_ids_[i];
+    //         if (velocity_commands_[i] >= 0.0) {
+    //             duty = (uint16_t)(velocity_commands_[i]);
+    //             message[3] = (uint8_t)DeviceMotorDirection::Forward;
+    //         } else {
+    //             duty = (uint16_t)(-velocity_commands_[i]);
+    //             message[3] = (uint8_t)DeviceMotorDirection::Reverse;
+    //         }
+    //         message[4] = (uint8_t)(duty & 0xFF);
+    //         message[5] = (uint8_t)((duty >> 8) & 0xFF);
 
-            // Store the current velocity
-            velocity_commands_saved_[i] = velocity_commands_[i];
-        }
-    }
+    //         // Send the motor command
+    //         if (serial_port_->is_open()) {
+    //             serial_port_->write_frame(message, 6);
+    //         }
+
+    //         // Store the current velocity
+    //         velocity_commands_saved_[i] = velocity_commands_[i];
+    //     }
+    // }
+
     return hardware_interface::return_type::OK;
 }

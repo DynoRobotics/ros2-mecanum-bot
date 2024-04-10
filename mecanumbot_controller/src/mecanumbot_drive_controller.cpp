@@ -131,7 +131,7 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
         return controller_interface::CallbackReturn::ERROR;
     }
 
-    velocity_command_subsciption_ = get_node()->create_subscription<Twist>("/velocity_controller/cmd_vel_unstamped", rclcpp::SystemDefaultsQoS(), [this](const Twist::SharedPtr twist)
+    velocity_command_subsciption_ = get_node()->create_subscription<Twist>("/mecanum_controller/cmd_vel_unstamped", rclcpp::SystemDefaultsQoS(), [this](const Twist::SharedPtr twist)
     {
         velocity_command_ptr_.writeFromNonRT(twist);
     });
