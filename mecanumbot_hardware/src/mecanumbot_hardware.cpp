@@ -8,6 +8,8 @@
 
 #include "mecanumbot_hardware/mecanumbot_hardware.hpp"
 
+// https://control.ros.org/master/doc/ros2_control/hardware_interface/doc/writing_new_hardware_component.html
+
 PLUGINLIB_EXPORT_CLASS(
     debict::mecanumbot::hardware::MecanumbotHardware,
     hardware_interface::SystemInterface
@@ -15,21 +17,41 @@ PLUGINLIB_EXPORT_CLASS(
 
 using namespace debict::mecanumbot::hardware;
 
+// Constructor
+MecanumbotHardware::MecanumbotHardware()   
+  : SystemInterface(),
+    odControlWord(0x6040, 0x00),
+    odModesOfOperation(0x6060, 0x00),
+    odStatusWord(0x6041, 0x00),
+    odTargetVelocity(0x60FF, 0x00),
+    odVelocityActualValue(0x6044, 0x00)
+{
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware constructor");
+}
+
 hardware_interface::CallbackReturn MecanumbotHardware::on_init(const hardware_interface::HardwareInfo & hardware_info)
 {
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "on_init");
+
     hardware_interface::CallbackReturn baseResult = hardware_interface::SystemInterface::on_init(hardware_info);
     if (baseResult != hardware_interface::CallbackReturn::SUCCESS) {
         return baseResult;
     }
 
-    serial_port_name_ = info_.hardware_parameters["serial_port"];
+    // info_.hardware_parameters are empty for me, seems to be bugged? enp5s0
+    network_interface_name_ = "enp5s0 (Ethernet interface)"; // "enp86s0 (Ethernet interface)"; // info_.hardware_parameters["network_interface_name"];
+    network_interface_protocol_ = "RESTful API"; // info_.hardware_parameters["network_interface_protocol"];
+
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Network interface name: '%s'", network_interface_name_.c_str());
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Network interface protocol: '%s'", network_interface_protocol_.c_str());
+
     motor_ids_.resize(info_.joints.size());
     position_states_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
     velocity_states_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
     velocity_commands_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
     velocity_commands_saved_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
-    
+    connectedDeviceHandles.resize(info_.joints.size(), std::nullopt);
+
     for (hardware_interface::ComponentInfo & joint : info_.joints)
     {
         if (joint.parameters["motor_id"].empty()) {
@@ -60,8 +82,8 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_init(const hardware_in
     }
 
     for (size_t i = 0; i < info_.joints.size(); i++) {
-        motor_ids_[i] = (uint8_t)std::stoi(info_.joints[i].parameters["motor_id"]);
-        RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "%s mapped to motor %d", info_.joints[i].name.c_str(), motor_ids_[i]);
+        motor_ids_[i] = std::stoul(info_.joints[i].parameters["motor_id"]);
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("MecanumbotHardware"), info_.joints[i].name.c_str() << " mapped to motor " << motor_ids_[i]);
     }
 
     return hardware_interface::CallbackReturn::SUCCESS;
@@ -107,9 +129,9 @@ std::vector<hardware_interface::CommandInterface> MecanumbotHardware::export_com
     return command_interfaces;
 }
 
-hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_lifecycle::State & previous_state)
+hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp_lifecycle::State & previous_state)
 {
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware starting ...");
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_configure ...");
 
     for (size_t i = 0; i < info_.joints.size(); i++) {
         if (std::isnan(position_states_[i])) {
@@ -124,14 +146,181 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_
         velocity_commands_saved_[i] = velocity_commands_[i];
     }
 
-    // TODO: Open the serial port
-    // serial_port_ = std::make_shared<MecanumbotSerialPort>();
-    // if (serial_port_->open(serial_port_name_) != return_type::SUCCESS) {
-    //     RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware failed to open serial port");
-    //     return hardware_interface::CallbackReturn::SUCCESS;
-    // }
+	unsigned lineNum = 0;
 
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware started");
+	try {
+
+		// its possible to set the logging level to a different level
+		nanolibHelper.setLoggingLevel(nlc::LogLevel::Off);
+
+        // list all hardware available
+        std::vector<nlc::BusHardwareId> busHardwareIds = nanolibHelper.getBusHardware();
+
+        if (busHardwareIds.empty()) {
+		    RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), "No hardware buses found.");
+			return hardware_interface::CallbackReturn::FAILURE;
+		}
+
+        auto busHwIdIt = std::find_if(busHardwareIds.begin(), busHardwareIds.end(),
+			[this](const nlc::BusHardwareId& id) {
+				return id.getName() == network_interface_name_ && id.getProtocol() == network_interface_protocol_;
+			});
+
+        if (busHwIdIt == busHardwareIds.end()) {
+			RCLCPP_ERROR_STREAM(rclcpp::get_logger("MecanumbotHardware"),
+                std::endl << std::endl
+                << "Could not find bus hardware with name '" 
+                << network_interface_name_ 
+                << "', and protocol '"
+                << network_interface_protocol_
+                << "'. Available hardware buses and protocols:");
+
+			lineNum = 0;
+			// print out available hardware
+			for (const nlc::BusHardwareId &busHwId : busHardwareIds) {
+			    RCLCPP_ERROR_STREAM(rclcpp::get_logger("MecanumbotHardware"),
+				    lineNum << ". name '" << busHwId.getName() << "', protocol: '" << busHwId.getProtocol() << "'");
+				lineNum++;
+			}
+
+			return hardware_interface::CallbackReturn::FAILURE;
+		}
+
+        nlc::BusHardwareId busHwId = *busHwIdIt;
+
+		// create bus hardware options for opening the hardware
+		nlc::BusHardwareOptions busHwOptions = nanolibHelper.createBusHardwareOptions(busHwId);
+
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("MecanumbotHardware"),
+		    "Opening bus hardware: " << busHwId.getName() << ", " << busHwId.getProtocol() << std::endl);
+
+		// now able to open the hardware itself
+		nanolibHelper.openBusHardware(busHwId, busHwOptions);
+		openedBusHardware = busHwId;
+
+		// Scan the bus for available devices
+		RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Scanning bus for devices...");
+
+		std::vector<nlc::DeviceId> deviceIds = nanolibHelper.scanBus(busHwId);
+
+		if (deviceIds.empty()) {
+			RCLCPP_ERROR_STREAM(rclcpp::get_logger("MecanumbotHardware"), std::endl << std::endl << "No devices found." << std::endl);
+			return hardware_interface::CallbackReturn::FAILURE;
+		}
+
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("MecanumbotHardware"), std::endl << std::endl << "Available devices:");
+
+		lineNum = 0;
+		// print out available devices
+		for (const nlc::DeviceId &deviceId : deviceIds) {
+			RCLCPP_INFO_STREAM(rclcpp::get_logger("MecanumbotHardware"), 
+                lineNum << ". " << deviceId.getDescription()
+                << " [device id: " << deviceId.getDeviceId()
+                << ", hardware: " << deviceId.getBusHardwareId().getName() << "]");
+			lineNum++;
+		}
+
+        for (const nlc::DeviceId &deviceId : deviceIds) {
+            
+            for (size_t i = 0; i < motor_ids_.size(); i++) {
+                auto joint_motor_id = motor_ids_.at(i);
+                auto joint_name = info_.joints.at(i).name;
+
+                if (joint_motor_id == deviceId.getDeviceId()) {
+                    
+                    // Register the device id
+                    nlc::DeviceHandle deviceHandle = nanolibHelper.addDevice(deviceId);
+
+                    // Establishing a connection with the device
+                    RCLCPP_INFO_STREAM(rclcpp::get_logger("MecanumbotHardware"),
+                        "Connecting joint name " << joint_name << " to nanotec device " << deviceId.getDescription());
+                    nanolibHelper.connectDevice(deviceHandle);
+
+                    // Store handle for later
+                    connectedDeviceHandles.at(i) = deviceHandle;
+                    
+                }
+            }
+		}
+
+	} catch (const nanolib_exception &e) {
+		RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
+        return hardware_interface::CallbackReturn::FAILURE;
+	}
+
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_configure done");
+
+    return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn MecanumbotHardware::on_cleanup(const rclcpp_lifecycle::State & previous_state)
+{
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_cleanup ...");
+
+    for (auto deviceHandle : connectedDeviceHandles)
+	{
+		if (deviceHandle.has_value()) {
+			RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Disconnecting nanotec device...");
+			nanolibHelper.disconnectDevice(*deviceHandle);
+		}
+	}
+
+	if (openedBusHardware.has_value()) {
+        RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Disconnecting nanotec bus...");
+		nanolibHelper.closeBusHardware(*openedBusHardware);
+	}
+
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_cleanup done");
+
+    return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_lifecycle::State & previous_state)
+{
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_activate ...");
+
+	int64_t CURRENT_STATUSWORD = 0;
+
+	for (auto deviceHandle : connectedDeviceHandles)
+	{
+		if (!deviceHandle.has_value()) {
+            RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Device handle is not set");
+            continue;
+        }
+
+		// Set velocity profile
+		nanolibHelper.writeInteger(*deviceHandle, MODE_VELOCITY_PROFILE, odModesOfOperation, MODES_OF_OPERATION_BITS);
+
+		// Set target velocity
+		nanolibHelper.writeInteger(*deviceHandle, 0, odTargetVelocity, TARGET_VELOCITY_BITS);
+
+		// Step through state machine startup sequence
+		nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_READY_TO_SWITCH_ON, odControlWord, CONTROL_WORD_BITS);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+		while ((CURRENT_STATUSWORD = (nanolibHelper.readInteger(*deviceHandle, odStatusWord) & 0xEF)) != 0x21) {
+			RCLCPP_WARN_STREAM(rclcpp::get_logger("MecanumbotHardware"), std::endl << CURRENT_STATUSWORD << std::endl);
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		}
+
+		nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_SWITCHED_ON, odControlWord, CONTROL_WORD_BITS);
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+		while ((CURRENT_STATUSWORD = nanolibHelper.readInteger(*deviceHandle, odStatusWord) & 0xEF) != 0x23) {
+			RCLCPP_WARN_STREAM(rclcpp::get_logger("MecanumbotHardware"), std::endl << CURRENT_STATUSWORD << std::endl);
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		}
+
+		nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED, odControlWord, CONTROL_WORD_BITS);
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+		while ((CURRENT_STATUSWORD = nanolibHelper.readInteger(*deviceHandle, odStatusWord) & 0xEF) != 0x27) {
+			RCLCPP_WARN_STREAM(rclcpp::get_logger("MecanumbotHardware"), std::endl << CURRENT_STATUSWORD << std::endl);
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		}
+    }
+
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_activate done");
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -139,11 +328,30 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_deactivate(const rclcp
 {
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware stopping ...");
 
-    // TODO: Close the serial port
-    // if (serial_port_->is_open()) {
-    //     serial_port_->close();
-    //     serial_port_.reset();
-    // }
+
+	for (auto deviceHandle : connectedDeviceHandles)
+	{
+		if (!deviceHandle.has_value()) {
+            RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Device handle is not set");
+            continue;
+        }
+
+		// Zero velocity
+		nanolibHelper.writeInteger(*deviceHandle, 0, odTargetVelocity, TARGET_VELOCITY_BITS);
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+	for (auto deviceHandle : connectedDeviceHandles)
+	{
+		if (!deviceHandle.has_value()) {
+            RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Device handle is not set");
+            continue;
+        }
+
+		// Stop state machine
+		nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_STOP_MOTOR, odControlWord, CONTROL_WORD_BITS);
+    }
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware stopped");
     return hardware_interface::CallbackReturn::SUCCESS;
@@ -186,39 +394,27 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
 
 hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & time, const rclcpp::Duration & period)
 {
-    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Writing to serial port ...");
 
-    // for (size_t i = 0; i < info_.joints.size(); i++) {
-    //     // Only send motor commands if the velocity changed
-    //     if (velocity_commands_[i] != velocity_commands_saved_[i]) {
+    for (size_t i = 0; i < info_.joints.size(); i++) {
+        // Only send motor commands if the velocity changed
+        if (velocity_commands_[i] != velocity_commands_saved_[i]) {
+            // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Motor velocity changed: %.5f", velocity_commands_[i]);
 
-    //         RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Motor velocity changed: %.5f", velocity_commands_[i]);
+            auto deviceHandle = connectedDeviceHandles.at(i);
 
-    //         // Generate the motor command message
-    //         uint16_t duty = 0;
-    //         uint8_t message[6];
-    //         message[0] = (uint8_t)DeviceCommand::MotorSetDuty;
-    //         message[1] = 4; // Payload len
-    //         message[2] = motor_ids_[i];
-    //         if (velocity_commands_[i] >= 0.0) {
-    //             duty = (uint16_t)(velocity_commands_[i]);
-    //             message[3] = (uint8_t)DeviceMotorDirection::Forward;
-    //         } else {
-    //             duty = (uint16_t)(-velocity_commands_[i]);
-    //             message[3] = (uint8_t)DeviceMotorDirection::Reverse;
-    //         }
-    //         message[4] = (uint8_t)(duty & 0xFF);
-    //         message[5] = (uint8_t)((duty >> 8) & 0xFF);
+            if (!deviceHandle.has_value()) {
+                // RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Device handle is not set");
+                continue;
+            }
 
-    //         // Send the motor command
-    //         if (serial_port_->is_open()) {
-    //             serial_port_->write_frame(message, 6);
-    //         }
+            // Set target velocity
+            // NOTE: 10 * 180/pi = 572.957795131, maaaybe correct?
+            nanolibHelper.writeInteger(*deviceHandle, (int64_t)(velocity_commands_[i]*572.957795131), odTargetVelocity, TARGET_VELOCITY_BITS);
 
-    //         // Store the current velocity
-    //         velocity_commands_saved_[i] = velocity_commands_[i];
-    //     }
-    // }
+            // Store the current velocity
+            velocity_commands_saved_[i] = velocity_commands_[i];
+        }
+    }
 
     return hardware_interface::return_type::OK;
 }
