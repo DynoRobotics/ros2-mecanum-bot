@@ -68,6 +68,8 @@ namespace debict
                 std::vector<double> velocity_states_;
                 std::vector<double> velocity_commands_;
                 std::vector<double> velocity_commands_saved_;
+                std::vector<double> position_commands_;
+                std::vector<double> position_commands_saved_;
 
                 std::string network_interface_name_;
                 std::string network_interface_protocol_;
@@ -83,6 +85,20 @@ namespace debict
 
                 const int64_t MODE_VELOCITY_PROFILE = 0x3;
 
+                // read registers
+
+                const nlc::OdIndex odErrorRegister;
+                const unsigned int ERROR_REGISTER_BITS = 8;
+
+                const nlc::OdIndex odErrorField;
+                const unsigned int ERROR_FIELD_BITS = 8;
+
+                const nlc::OdIndex odErrorCode;
+                const unsigned int ERROR_CODE_BITS = 16;
+
+
+                // write registers
+
                 const nlc::OdIndex odControlWord;
                 const unsigned int CONTROL_WORD_BITS = 16;
 
@@ -97,6 +113,22 @@ namespace debict
 
                 const nlc::OdIndex odVelocityActualValue;
                 const unsigned int VELOCITY_ACTUAL_VALUE_BITS = 16;
+
+                const nlc::OdIndex odMaxAcceleration;
+                const unsigned int MAX_ACCELERATION_BITS = 32;
+
+                const nlc::OdIndex odMaxDeceleration;
+                const unsigned int MAX_DECELERATION_BITS = 32;
+
+                const nlc::OdIndex odAccelerationProfile;
+                const unsigned int ACCELERATION_PROFILE_BITS = 32;
+
+                const nlc::OdIndex odDecelerationProfile;
+                const unsigned int DECELERATION_PROFILE_BITS = 32;
+
+                const nlc::OdIndex odTmp;
+                const unsigned int TMP_BITS = 32;
+
             };
         }
     }
