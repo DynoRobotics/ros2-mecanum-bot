@@ -20,7 +20,7 @@ namespace debict
                     std::reference_wrapper<const hardware_interface::LoanedStateInterface> position_state_rear,
                     std::reference_wrapper<const hardware_interface::LoanedStateInterface> velocity_state_front,
                     std::reference_wrapper<const hardware_interface::LoanedStateInterface> velocity_state_rear,
-                    std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_font,
+                    std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_front,
                     std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_rear
                     );
 
@@ -36,7 +36,7 @@ namespace debict
                 std::reference_wrapper<const hardware_interface::LoanedStateInterface> position_state_rear_;
                 std::reference_wrapper<const hardware_interface::LoanedStateInterface> velocity_state_front_;
                 std::reference_wrapper<const hardware_interface::LoanedStateInterface> velocity_state_rear_;
-                std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_font_;
+                std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_front_;
                 std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_rear_;
 
                 double plate_height_meters_target_{0.0};

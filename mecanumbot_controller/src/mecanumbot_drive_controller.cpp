@@ -36,8 +36,8 @@ controller_interface::InterfaceConfiguration MecanumbotDriveController::command_
     command_interfaces_config.names.push_back(rl_wheel_joint_name_ + "/" + hardware_interface::HW_IF_VELOCITY);
     command_interfaces_config.names.push_back(rr_wheel_joint_name_ + "/" + hardware_interface::HW_IF_VELOCITY);
 
-    // command_interfaces_config.names.push_back(plate_front_joint_name_+ "/" + hardware_interface::HW_IF_POSITION);
-    // command_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_POSITION);
+    command_interfaces_config.names.push_back(plate_front_joint_name_+ "/" + hardware_interface::HW_IF_POSITION);
+    command_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_POSITION);
 
     return command_interfaces_config;
 }
@@ -58,10 +58,10 @@ controller_interface::InterfaceConfiguration MecanumbotDriveController::state_in
     state_interfaces_config.names.push_back(rr_wheel_joint_name_ + "/" + hardware_interface::HW_IF_POSITION);
     state_interfaces_config.names.push_back(rr_wheel_joint_name_ + "/" + hardware_interface::HW_IF_VELOCITY);
 
-    // state_interfaces_config.names.push_back(plate_front_joint_name_ + "/" + hardware_interface::HW_IF_POSITION);
-    // state_interfaces_config.names.push_back(plate_front_joint_name_ + "/" + hardware_interface::HW_IF_VELOCITY);
-    // state_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_POSITION);
-    // state_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_VELOCITY);
+    state_interfaces_config.names.push_back(plate_front_joint_name_ + "/" + hardware_interface::HW_IF_POSITION);
+    state_interfaces_config.names.push_back(plate_front_joint_name_ + "/" + hardware_interface::HW_IF_VELOCITY);
+    state_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_POSITION);
+    state_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_VELOCITY);
 
     return state_interfaces_config;
 }
@@ -74,7 +74,7 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_init()
 
 controller_interface::return_type MecanumbotDriveController::update(const rclcpp::Time & /*time*/, const rclcpp::Duration & period)
 {
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Update MecanumbotDriveController");
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Update MecanumbotDriveController");
 
     // Get the last velocity command
     auto velocity_command = velocity_command_ptr_.readFromRT();
@@ -96,18 +96,19 @@ controller_interface::return_type MecanumbotDriveController::update(const rclcpp
         rr_wheel_->set_velocity(rr_wheel_velocity);
     }
 
-    // // TODO: Add the lift motor position here
-    // auto plate_height_command = plate_height_command_ptr_.readFromRT();
-    // if (plate_height_command && *plate_height_command) {
-    //     plate_->set_plate_height_decimal((*plate_height_command)->data);
-    // }
+    // TODO: Add the lift motor position here
+    auto plate_height_command = plate_height_command_ptr_.readFromRT();
+    if (plate_height_command && *plate_height_command) {
+        RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate height in update: %f", (*plate_height_command)->data);
+        plate_->set_plate_height_decimal((*plate_height_command)->data);
+    }
 
-    // auto plate_angle_command = plate_angle_command_ptr_.readFromRT();
-    // if (plate_angle_command && *plate_angle_command) {
-    //     plate_->set_plate_angle_radians((*plate_angle_command)->data);
-    // }
+    auto plate_angle_command = plate_angle_command_ptr_.readFromRT();
+    if (plate_angle_command && *plate_angle_command) {
+        plate_->set_plate_angle_radians((*plate_angle_command)->data);
+    }
 
-    // plate_->update(period.seconds());
+    plate_->update(period.seconds());
 
     return controller_interface::return_type::OK;
 }
@@ -138,18 +139,18 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
         return controller_interface::CallbackReturn::ERROR;
     }
 
-    // plate_front_joint_name_ = get_node()->get_parameter("plate_front_joint_name").as_string();
-    // plate_rear_joint_name_ = get_node()->get_parameter("plate_rear_joint_name").as_string();
+    plate_front_joint_name_ = get_node()->get_parameter("plate_front_joint_name").as_string();
+    plate_rear_joint_name_ = get_node()->get_parameter("plate_rear_joint_name").as_string();
 
-    // if (plate_front_joint_name_.empty()) {
-    //     RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "'plate_front_joint_name' parameter was empty");
-    //     return controller_interface::CallbackReturn::ERROR;
-    // }
+    if (plate_front_joint_name_.empty()) {
+        RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "'plate_front_joint_name' parameter was empty");
+        return controller_interface::CallbackReturn::ERROR;
+    }
 
-    // if (plate_rear_joint_name_.empty()) {
-    //     RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "'plate_rear_joint_name' parameter was empty");
-    //     return controller_interface::CallbackReturn::ERROR;
-    // }
+    if (plate_rear_joint_name_.empty()) {
+        RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "'plate_rear_joint_name' parameter was empty");
+        return controller_interface::CallbackReturn::ERROR;
+    }
 
     wheel_radius_ = get_node()->get_parameter("wheel_radius").as_double();
     wheel_distance_width_ = get_node()->get_parameter("wheel_distance.width").as_double();
@@ -179,17 +180,18 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
         velocity_command_ptr_.writeFromNonRT(twist);
     });
 
-    // // TODO READ UP/DOWN TOPIC FOR LIFT MOTOR
-    // plate_height_command_subsciption_ = get_node()->create_subscription<Float64>("/plate_lift_controller/trigger_plate", rclcpp::SystemDefaultsQoS(), [this](const Float64::SharedPtr msg)
-    // {
-    //     plate_height_command_ptr_.writeFromNonRT(msg);
-    // });
+    // TODO READ UP/DOWN TOPIC FOR LIFT MOTOR
+    plate_height_command_subsciption_ = get_node()->create_subscription<Float64>("/plate_lift_controller/trigger_plate", rclcpp::SystemDefaultsQoS(), [this](const Float64::SharedPtr msg)
+    {
+        RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate height command message callback: %f", msg->data);
+        plate_height_command_ptr_.writeFromNonRT(msg);
+    });
 
-    // // TODO READ TILT MOTOR
-    // plate_angle_command_subsciption_ = get_node()->create_subscription<Float64>("/plate_tilt_controller/tilt_angle", rclcpp::SystemDefaultsQoS(), [this](const Float64::SharedPtr msg)
-    // {
-    //     plate_angle_command_ptr_.writeFromNonRT(msg);
-    // });
+    // TODO READ TILT MOTOR
+    plate_angle_command_subsciption_ = get_node()->create_subscription<Float64>("/plate_tilt_controller/tilt_angle", rclcpp::SystemDefaultsQoS(), [this](const Float64::SharedPtr msg)
+    {
+        plate_angle_command_ptr_.writeFromNonRT(msg);
+    });
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Configure done for MecanumbotDriveController");
 
@@ -205,7 +207,7 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_activate(cons
     fr_wheel_ = get_wheel(fr_wheel_joint_name_);
     rl_wheel_ = get_wheel(rl_wheel_joint_name_);
     rr_wheel_ = get_wheel(rr_wheel_joint_name_);
-    // plate_ = get_plate(plate_front_joint_name_, plate_rear_joint_name_);
+    plate_ = get_plate(plate_front_joint_name_, plate_rear_joint_name_);
 
     if (!fl_wheel_ || !fr_wheel_ || !rl_wheel_ || !rr_wheel_/* || !plate_*/) {
         return controller_interface::CallbackReturn::ERROR;
@@ -388,15 +390,15 @@ bool MecanumbotDriveController::reset()
 
     subscriber_is_active_ = false;
     velocity_command_subsciption_.reset();
-    // plate_height_command_subsciption_.reset();
-    // plate_angle_command_subsciption_.reset();
+    plate_height_command_subsciption_.reset();
+    plate_angle_command_subsciption_.reset();
 
     fl_wheel_.reset();
     fr_wheel_.reset();
     rl_wheel_.reset();
     rr_wheel_.reset();
 
-    // plate_.reset();
+    plate_.reset();
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Reset done MecanumbotDriveController");
 
