@@ -23,6 +23,7 @@ MecanumbotHardware::MecanumbotHardware()
     odControlWord(0x6040, 0x00),
     odModesOfOperation(0x6060, 0x00),
     odStatusWord(0x6041, 0x00),
+    odTargetPosition(0x607A, 0x00),
     odTargetVelocity(0x60FF, 0x00),
     odVelocityActualValue(0x6044, 0x00),
     odErrorRegister(0x1001, 0x00),
@@ -32,7 +33,7 @@ MecanumbotHardware::MecanumbotHardware()
     odMaxDeceleration(0x60C6, 0x00),
     odAccelerationProfile(0x6083, 0x00),
     odDecelerationProfile(0x6084, 0x00),
-    odTmp(0x60C6, 0x00)
+    odTmp(0x6061, 0x00)
 {
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware constructor");
 }
@@ -61,30 +62,32 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_init(const hardware_in
     motor_ids_.resize(info_.joints.size());
     position_states_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
     velocity_states_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
+    position_commands_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
+    position_commands_saved_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
     velocity_commands_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
     velocity_commands_saved_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
     connectedDeviceHandles.resize(info_.joints.size(), std::nullopt);
 
-    for (hardware_interface::ComponentInfo & joint : info_.joints)
-    {
+    for (hardware_interface::ComponentInfo & joint : info_.joints){   
+        // print joint name
+        RCLCPP_DEBUG(rclcpp::get_logger("MecanumbotHardware"), "Joint name: %s, is lift motor: %d", joint.name.c_str(), is_lift_motor(joint));
+
         if (joint.parameters["motor_id"].empty()) {
             RCLCPP_FATAL(rclcpp::get_logger("MecanumbotHardware"), "Motor id not defined for join %s", joint.name.c_str());
             return hardware_interface::CallbackReturn::ERROR;
         }
-
-        if (is_lift_motor(joint)){
-            continue;
-        }
-
         if (joint.command_interfaces.size() != 1) {
             RCLCPP_FATAL(rclcpp::get_logger("MecanumbotHardware"), "Invalid number of command interfaces (expected: 1)");
             return hardware_interface::CallbackReturn::ERROR;
         }
-        if (joint.command_interfaces[0].name != hardware_interface::HW_IF_VELOCITY) {
+        if (!is_lift_motor(joint) && joint.command_interfaces[0].name != hardware_interface::HW_IF_VELOCITY) {
             RCLCPP_FATAL(rclcpp::get_logger("MecanumbotHardware"), "Invalid joint command interface 0 type (expected: velocity)");
             return hardware_interface::CallbackReturn::ERROR;
+        } else if(is_lift_motor(joint) && joint.command_interfaces[0].name != hardware_interface::HW_IF_POSITION){
+            RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), joint.name.c_str());
+            RCLCPP_FATAL(rclcpp::get_logger("MecanumbotHardware"), "Invalid joint command interface 0 type (expected: position)");
+            return hardware_interface::CallbackReturn::ERROR;
         }
-
         if (joint.state_interfaces.size() != 2) {
             RCLCPP_FATAL(rclcpp::get_logger("MecanumbotHardware"), "Invalid number of state interfaces (expected: 2)");
             return hardware_interface::CallbackReturn::ERROR;
@@ -156,7 +159,7 @@ std::vector<hardware_interface::CommandInterface> MecanumbotHardware::export_com
     return command_interfaces;
 }
 
-hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp_lifecycle::State & previous_state)
+hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp_lifecycle::State & _previous_state)
 {
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_configure ...");
 
@@ -167,9 +170,13 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
         if (std::isnan(velocity_states_[i])) {
             velocity_states_[i] = 0.0f;
         }
+        if (std::isnan(position_commands_[i])) {
+            position_commands_[i] = 0.0f;
+        }
         if (std::isnan(velocity_commands_[i])) {
             velocity_commands_[i] = 0.0f;
         }
+        position_commands_saved_[i] = position_commands_[i];
         velocity_commands_saved_[i] = velocity_commands_[i];
     }
 
@@ -235,7 +242,7 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
 			return hardware_interface::CallbackReturn::FAILURE;
 		}
 
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("MecanumbotHardware"), std::endl << std::endl << "Available devices:");
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("MecanumbotHardware"), "----------- Available devices: -----------");
 
 		lineNum = 0;
 		// print out available devices
@@ -246,12 +253,14 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                 << ", hardware: " << deviceId.getBusHardwareId().getName() << "]");
 			lineNum++;
 		}
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("MecanumbotHardware"), "----------------------------------------- \n");
 
         for (const nlc::DeviceId &deviceId : deviceIds) {
             
             for (size_t i = 0; i < motor_ids_.size(); i++) {
                 auto joint_motor_id = motor_ids_.at(i);
                 auto joint_name = info_.joints.at(i).name;
+                auto joint = info_.joints.at(i);
 
                 if (joint_motor_id == deviceId.getDeviceId()) {
                     
@@ -266,21 +275,25 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                     // Store handle for later
                     connectedDeviceHandles.at(i) = deviceHandle;
 
-                    // Set default values for motor
-                    RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Setting default values for motor");
-                    int max_acceleration{1000000};
-                    nanolibHelper.writeInteger(deviceHandle, max_acceleration, odMaxAcceleration, MAX_ACCELERATION_BITS);
-                    RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max acceleration set to %d", max_acceleration);
-                    int max_deceleration{30000};
-                    nanolibHelper.writeInteger(deviceHandle, max_deceleration, odMaxDeceleration, MAX_DECELERATION_BITS);
-                    RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max deceleration set to %d", max_deceleration);
+                    // Set default values for lift motor
+                    if(is_lift_motor(joint)){
+                        // TODO: Set default values for lift motors
+                    } else { // Default values for wheel motors
+                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Setting default values for motor");
+                        int max_acceleration{1000000};
+                        nanolibHelper.writeInteger(deviceHandle, max_acceleration, odMaxAcceleration, MAX_ACCELERATION_BITS);
+                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max acceleration set to %d", max_acceleration);
+                        int max_deceleration{30000};
+                        nanolibHelper.writeInteger(deviceHandle, max_deceleration, odMaxDeceleration, MAX_DECELERATION_BITS);
+                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max deceleration set to %d", max_deceleration);
 
-                    int acceleration_profile{300000};
-                    nanolibHelper.writeInteger(deviceHandle, acceleration_profile, odAccelerationProfile, ACCELERATION_PROFILE_BITS);
-                    RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max acceleration profile set to %d", acceleration_profile);
-                    int deceleration_profile{300000};
-                    nanolibHelper.writeInteger(deviceHandle, deceleration_profile, odDecelerationProfile, DECELERATION_PROFILE_BITS);
-                    RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max deceleration profile set to %d", deceleration_profile);
+                        int acceleration_profile{300000};
+                        nanolibHelper.writeInteger(deviceHandle, acceleration_profile, odAccelerationProfile, ACCELERATION_PROFILE_BITS);
+                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max acceleration profile set to %d", acceleration_profile);
+                        int deceleration_profile{300000};
+                        nanolibHelper.writeInteger(deviceHandle, deceleration_profile, odDecelerationProfile, DECELERATION_PROFILE_BITS);
+                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max deceleration profile set to %d", deceleration_profile);
+                    }
                 }
             }
 		}
@@ -322,19 +335,27 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_activate ...");
 
 	int64_t CURRENT_STATUSWORD = 0;
-
+    int64_t i{0};
 	for (auto deviceHandle : connectedDeviceHandles)
 	{
 		if (!deviceHandle.has_value()) {
             RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Device handle is not set");
+            i++;
             continue;
         }
 
 		// Set velocity profile
-		nanolibHelper.writeInteger(*deviceHandle, MODE_VELOCITY_PROFILE, odModesOfOperation, MODES_OF_OPERATION_BITS);
-
-		// Set target velocity
-		nanolibHelper.writeInteger(*deviceHandle, 0, odTargetVelocity, TARGET_VELOCITY_BITS);
+        if(is_lift_motor(info_.joints.at(i))){
+            // Set mode of operation (position mode)
+            RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Lift motor - set position mode");
+            nanolibHelper.writeInteger(*deviceHandle, MODE_POSITION_PROFILE, odModesOfOperation, MODES_OF_OPERATION_BITS);
+        } else {
+            RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Wheel motor - set velocity mode");
+            // Set mode of operation (velocity mode)
+            nanolibHelper.writeInteger(*deviceHandle, MODE_VELOCITY_PROFILE, odModesOfOperation, MODES_OF_OPERATION_BITS);
+            // Set target velocity
+		    nanolibHelper.writeInteger(*deviceHandle, 0, odTargetVelocity, TARGET_VELOCITY_BITS);
+        }
 
 		// Step through state machine startup sequence
 		nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_READY_TO_SWITCH_ON, odControlWord, CONTROL_WORD_BITS);
@@ -353,13 +374,18 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_
 			std::this_thread::sleep_for(std::chrono::milliseconds(500));
 		}
 
-		nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED, odControlWord, CONTROL_WORD_BITS);
+        if(is_lift_motor(info_.joints.at(i))){
+            nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR, odControlWord, CONTROL_WORD_BITS);
+        } else {
+            nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED, odControlWord, CONTROL_WORD_BITS);
+        }
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 		while ((CURRENT_STATUSWORD = nanolibHelper.readInteger(*deviceHandle, odStatusWord) & 0xEF) != 0x27) {
 			RCLCPP_WARN_STREAM(rclcpp::get_logger("MecanumbotHardware"), std::endl << CURRENT_STATUSWORD << std::endl);
 			std::this_thread::sleep_for(std::chrono::milliseconds(500));
 		}
+        i++;
     }
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_activate done");
@@ -432,21 +458,22 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
         }
 
         // read the actual velocity
-        try{
-            actual_velocity = nanolibHelper.readInteger(*deviceHandle, odVelocityActualValue);
-        } catch (const nanolib_exception &e) {
-            RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
-        }
+        // try{
+        //     actual_velocity = nanolibHelper.readInteger(*deviceHandle, odVelocityActualValue);
+        // } catch (const nanolib_exception &e) {
+        //     RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
+        // }
         // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Actual velocity: %d", actual_velocity);
 
         // read the tmp value
         int tmp{0};
         try{
-            tmp = nanolibHelper.readInteger(*deviceHandle, odTmp);
+            tmp = nanolibHelper.readInteger(*deviceHandle, odStatusWord);
         } catch (const nanolib_exception &e) {
             RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
         }
-        // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Tmp: %d", tmp);
+        tmp = tmp & 0xEF;
+        RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Control word: 0x%x", tmp);
 
     }
     return hardware_interface::return_type::OK;
@@ -456,6 +483,36 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
 {
 
     for (size_t i = 0; i < info_.joints.size(); i++) {
+        // If lift motor
+        if (is_lift_motor(info_.joints.at(i))){
+            auto deviceHandle = connectedDeviceHandles.at(i);
+
+            if (!deviceHandle.has_value()) {
+                // RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Device handle is not set");
+                continue;
+            }
+            // Set target position
+            RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Try write to lift motor");
+            try{
+                nanolibHelper.writeInteger(*deviceHandle, 3600*5, odTargetPosition, TARGET_POSITION_BITS);
+                RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Target position set to 100");
+            } catch (const nanolib_exception &e) {
+                RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
+            }
+
+            // Set the trigger bit in control word
+            try{
+                nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_RUN_LIFT_MOTOR, odControlWord, CONTROL_WORD_BITS);
+                RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Control word set to 0x3F to make motor spin");
+            } catch (const nanolib_exception &e) {
+                RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
+            }
+
+            continue;
+        }
+
+        continue;
+
         // Only send motor commands if the velocity changed
         if (velocity_commands_[i] != velocity_commands_saved_[i]) {
             // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Motor velocity changed: %.5f", velocity_commands_[i]);

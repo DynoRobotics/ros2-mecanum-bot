@@ -81,6 +81,8 @@ controller_interface::return_type MecanumbotDriveController::update(const rclcpp
     rl_wheel_->set_velocity(rl_wheel_velocity);
     rr_wheel_->set_velocity(rr_wheel_velocity);
 
+    // TODO: Add the lift motor position here
+
     return controller_interface::return_type::OK;
 }
 
@@ -135,6 +137,10 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
     {
         velocity_command_ptr_.writeFromNonRT(twist);
     });
+
+    // TODO READ UP/DOWN TOPIC FOR LIFT MOTOR
+
+    // TODO READ TILT MOTOR
 
     return controller_interface::CallbackReturn::SUCCESS;
 }

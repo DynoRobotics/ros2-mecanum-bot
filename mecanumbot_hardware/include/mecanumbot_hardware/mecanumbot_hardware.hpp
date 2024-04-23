@@ -81,9 +81,15 @@ namespace debict
                 const int64_t CONTROL_WORD_READY_TO_SWITCH_ON = 0x6;
                 const int64_t CONTROL_WORD_SWITCHED_ON = 0x7;
                 const int64_t CONTROL_WORD_OPERATION_ENABLED = 0xF;
+                const int64_t CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR = 0x2F;
+                const int64_t CONTROL_WORD_RUN_LIFT_MOTOR = 0x3F;
                 const int64_t CONTROL_WORD_STOP_MOTOR = 0x0;
 
+                const int64_t MODE_POSITION_PROFILE = 0x1;
                 const int64_t MODE_VELOCITY_PROFILE = 0x3;
+
+                const int64_t LIFT_MOTOR_TOP_POSITION = 3600;
+                const int64_t LIFT_MOTOR_BOTTOM_POSITION = 0;
 
                 // read registers
 
@@ -95,6 +101,9 @@ namespace debict
 
                 const nlc::OdIndex odErrorCode;
                 const unsigned int ERROR_CODE_BITS = 16;
+
+                const nlc::OdIndex odVelocityActualValue;
+                const unsigned int VELOCITY_ACTUAL_VALUE_BITS = 16;
 
 
                 // write registers
@@ -108,11 +117,11 @@ namespace debict
                 const nlc::OdIndex odStatusWord;
                 const unsigned int STATUS_WORD_BITS = 16;
 
+                const nlc::OdIndex odTargetPosition;
+                const unsigned int TARGET_POSITION_BITS = 32;
+
                 const nlc::OdIndex odTargetVelocity;
                 const unsigned int TARGET_VELOCITY_BITS = 32;
-
-                const nlc::OdIndex odVelocityActualValue;
-                const unsigned int VELOCITY_ACTUAL_VALUE_BITS = 16;
 
                 const nlc::OdIndex odMaxAcceleration;
                 const unsigned int MAX_ACCELERATION_BITS = 32;
