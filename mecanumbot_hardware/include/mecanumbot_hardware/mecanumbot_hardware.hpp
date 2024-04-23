@@ -68,7 +68,7 @@ namespace debict
                 std::vector<double> velocity_states_;
                 std::vector<double> velocity_commands_;
                 std::vector<double> velocity_commands_saved_;
-                std::vector<double> position_commands_;
+                std::vector<double> position_commands_; // stored in meter
                 std::vector<double> position_commands_saved_;
 
                 std::string network_interface_name_;
@@ -81,9 +81,10 @@ namespace debict
                 const int64_t CONTROL_WORD_READY_TO_SWITCH_ON = 0x6;
                 const int64_t CONTROL_WORD_SWITCHED_ON = 0x7;
                 const int64_t CONTROL_WORD_OPERATION_ENABLED = 0xF;
+                const int64_t CONTROL_WORD_STOP_MOTOR = 0x0;
+
                 const int64_t CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR = 0x2F;
                 const int64_t CONTROL_WORD_RUN_LIFT_MOTOR = 0x3F;
-                const int64_t CONTROL_WORD_STOP_MOTOR = 0x0;
 
                 const int64_t MODE_POSITION_PROFILE = 0x1;
                 const int64_t MODE_VELOCITY_PROFILE = 0x3;
@@ -105,6 +106,9 @@ namespace debict
                 const nlc::OdIndex odVelocityActualValue;
                 const unsigned int VELOCITY_ACTUAL_VALUE_BITS = 16;
 
+                const nlc::OdIndex odLiftActualPosition;
+                const unsigned int LIFT_POSITION_ACTUAL_VALUE_BITS = 32;
+
 
                 // write registers
 
@@ -117,7 +121,7 @@ namespace debict
                 const nlc::OdIndex odStatusWord;
                 const unsigned int STATUS_WORD_BITS = 16;
 
-                const nlc::OdIndex odTargetPosition;
+                const nlc::OdIndex odLiftTargetPosition;
                 const unsigned int TARGET_POSITION_BITS = 32;
 
                 const nlc::OdIndex odTargetVelocity;
