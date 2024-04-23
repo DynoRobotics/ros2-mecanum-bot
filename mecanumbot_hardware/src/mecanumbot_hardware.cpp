@@ -349,12 +349,13 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_activate ...");
 
 	int64_t CURRENT_STATUSWORD = 0;
-    int64_t i{0};
-	for (auto deviceHandle : connectedDeviceHandles)
+
+	for (size_t i = 0; i < info_.joints.size(); i++)
 	{
+        auto deviceHandle = connectedDeviceHandles.at(i);
+
 		if (!deviceHandle.has_value()) {
             RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Device handle is not set");
-            i++;
             continue;
         }
 
@@ -403,7 +404,6 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_
 			RCLCPP_WARN_STREAM(rclcpp::get_logger("MecanumbotHardware"), "Waiting to be ready for operation. Status: 0x" << std::hex << CURRENT_STATUSWORD << std::endl);
 			std::this_thread::sleep_for(std::chrono::milliseconds(500));
 		}
-        i++;
     }
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_activate done");

@@ -7,8 +7,10 @@
 #include <rclcpp_lifecycle/state.hpp>
 #include <realtime_tools/realtime_buffer.h>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <std_msgs/msg/float64.hpp>
 #include <string>
 
+#include "mecanumbot_controller/mecanumbot_plate.hpp"
 #include "mecanumbot_controller/mecanumbot_wheel.hpp"
 #include "mecanumbot_controller/mecanumbot_controller_compiler.h"
 
@@ -19,6 +21,7 @@ namespace debict
         namespace controller
         {
             using Twist = geometry_msgs::msg::Twist;
+            using Float64 = std_msgs::msg::Float64;
 
             class MecanumbotDriveController
                 : public controller_interface::ControllerInterface
@@ -60,19 +63,33 @@ namespace debict
             protected:
                 std::shared_ptr<MecanumbotWheel> get_wheel(const std::string & wheel_joint_name);
 
+                std::shared_ptr<MecanumbotPlate> get_plate(const std::string & plate_front_joint_name, const std::string & plate_rear_joint_name);
+
                 bool reset();
 
             protected:
                 rclcpp::Subscription<Twist>::SharedPtr velocity_command_subsciption_;
                 realtime_tools::RealtimeBuffer<std::shared_ptr<Twist>> velocity_command_ptr_;
+
+                rclcpp::Subscription<Float64>::SharedPtr plate_height_command_subsciption_;
+                realtime_tools::RealtimeBuffer<std::shared_ptr<Float64>> plate_height_command_ptr_;
+
+                rclcpp::Subscription<Float64>::SharedPtr plate_angle_command_subsciption_;
+                realtime_tools::RealtimeBuffer<std::shared_ptr<Float64>> plate_angle_command_ptr_;
+
                 std::shared_ptr<MecanumbotWheel> fl_wheel_;
                 std::shared_ptr<MecanumbotWheel> fr_wheel_;
                 std::shared_ptr<MecanumbotWheel> rl_wheel_;
                 std::shared_ptr<MecanumbotWheel> rr_wheel_;
+                std::shared_ptr<MecanumbotPlate> plate_;
+                
                 std::string fl_wheel_joint_name_;
                 std::string fr_wheel_joint_name_;
                 std::string rl_wheel_joint_name_;
                 std::string rr_wheel_joint_name_;
+                std::string plate_front_joint_name_;
+                std::string plate_rear_joint_name_;
+                
                 double linear_scale_;
                 double radial_scale_;
                 double wheel_radius_;

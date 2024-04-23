@@ -29,6 +29,7 @@ add_library(
   SHARED
   src/mecanumbot_drive_controller.cpp
   src/mecanumbot_wheel.cpp
+  src/mecanumbot_plate.cpp
 )
 target_include_directories(
   ${PROJECT_NAME}
