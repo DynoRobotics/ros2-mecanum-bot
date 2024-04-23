@@ -40,20 +40,22 @@ MecanumbotHardware::MecanumbotHardware()
 }
 
 bool is_lift_motor(hardware_interface::ComponentInfo & joint ){
-    return (joint.name == "plate_lift_joint" || joint.name == "plate_tilt_joint");
+    return (joint.name == "plate_front_joint" || joint.name == "plate_rear_joint");
 
 }
 
 // function for converting meters to poses
 // 3600 position per full rotation
-// 3.98mm per full rotation
-// hight = 0.00389 * 3600 * positions
-int lift_hight_to_positions(double hight){
-    return hight / 14.328;
+// 3.978mm per full rotation
+// hight = 0.003978 * positions / 3600
+// -> position = hight / 0.003978 * 3600
+int64_t lift_hight_to_positions(double hight){
+    return hight / 0.003978 * 3600.0;
 }
 
-double lift_positions_to_hight(int positions){
-    return 14.328 * positions;
+// 
+double lift_positions_to_hight(int64_t positions){
+    return 0.003978 * static_cast<double>(positions) / 3600.0;
 }
 
 
@@ -67,7 +69,7 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_init(const hardware_in
     }
 
     // info_.hardware_parameters are empty for me, seems to be bugged? enp5s0
-    network_interface_name_ = "eno1 (Ethernet interface)"; // "enp86s0 (Ethernet interface)"; // info_.hardware_parameters["network_interface_name"];
+    network_interface_name_ = "enp5s0 (Ethernet interface)"; // "enp86s0 (Ethernet interface)"; // info_.hardware_parameters["network_interface_name"];
     network_interface_protocol_ = "RESTful API"; // info_.hardware_parameters["network_interface_protocol"];
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Network interface name: '%s'", network_interface_name_.c_str());
@@ -82,9 +84,12 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_init(const hardware_in
     velocity_commands_saved_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
     connectedDeviceHandles.resize(info_.joints.size(), std::nullopt);
 
-    for (hardware_interface::ComponentInfo & joint : info_.joints){   
+    for (hardware_interface::ComponentInfo & joint : info_.joints) {
         // print joint name
-        RCLCPP_DEBUG(rclcpp::get_logger("MecanumbotHardware"), "Joint name: %s, is lift motor: %d", joint.name.c_str(), is_lift_motor(joint));
+        RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Joint name: %s, is lift motor: %d", joint.name.c_str(), is_lift_motor(joint));
+    }
+
+    for (hardware_interface::ComponentInfo & joint : info_.joints){
 
         if (joint.parameters["motor_id"].empty()) {
             RCLCPP_FATAL(rclcpp::get_logger("MecanumbotHardware"), "Motor id not defined for join %s", joint.name.c_str());
@@ -95,11 +100,11 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_init(const hardware_in
             return hardware_interface::CallbackReturn::ERROR;
         }
         if (!is_lift_motor(joint) && joint.command_interfaces[0].name != hardware_interface::HW_IF_VELOCITY) {
-            RCLCPP_FATAL(rclcpp::get_logger("MecanumbotHardware"), "Invalid joint command interface 0 type (expected: velocity)");
+            RCLCPP_FATAL(rclcpp::get_logger("MecanumbotHardware"), "Invalid joint %s command interface 0 type (expected: velocity)", joint.name.c_str());
             return hardware_interface::CallbackReturn::ERROR;
         } else if(is_lift_motor(joint) && joint.command_interfaces[0].name != hardware_interface::HW_IF_POSITION){
             RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), joint.name.c_str());
-            RCLCPP_FATAL(rclcpp::get_logger("MecanumbotHardware"), "Invalid joint command interface 0 type (expected: position)");
+            RCLCPP_FATAL(rclcpp::get_logger("MecanumbotHardware"), "Invalid joint %s command interface 0 type (expected: position)", joint.name.c_str());
             return hardware_interface::CallbackReturn::ERROR;
         }
         if (joint.state_interfaces.size() != 2) {
@@ -489,8 +494,10 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
         // read feedback and put into state variables
         if(is_lift_motor(info_.joints.at(i))){          // lift motor interface states
             try{     // read position and set position state
-                double position = nanolibHelper.readInteger(*deviceHandle, odLiftActualPosition);
+                int64_t position = nanolibHelper.readInteger(*deviceHandle, odLiftActualPosition);
                 position_states_[i] = lift_positions_to_hight(position);
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Position: %ld", position);
+
             } catch (const nanolib_exception &e) {
                 RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
             }
@@ -521,11 +528,11 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
         // If lift motor
         if (is_lift_motor(info_.joints.at(i)) && position_commands_[i] != position_commands_saved_[i]){
             // Set target position
-            RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Try write to lift motor");
+            // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Try write to lift motor");
             try{
-                int target_position = lift_hight_to_positions(position_commands_[i]);
+                int64_t target_position = lift_hight_to_positions(position_commands_[i]);
                 nanolibHelper.writeInteger(*deviceHandle, target_position, odLiftTargetPosition, TARGET_POSITION_BITS);
-                RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Target position set to %d", target_position);
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Target position set to %ld", target_position);
             } catch (const nanolib_exception &e) {
                 RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
             }
