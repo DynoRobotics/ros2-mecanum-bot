@@ -51,11 +51,20 @@ double MecanumbotPlate::get_plate_angle_radians()
 
 void MecanumbotPlate::update(double dt)
 {
+    // -------------------------------------------
+    double front_height_meters = position_state_front_.get().get_value();
+    double rear_height_meters = position_state_rear_.get().get_value();
+
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "front_height_meters: %f", front_height_meters);
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "rear_height_meters: %f", rear_height_meters);
+
+    // -------------------------------------------
+
     double actual_height = this->get_plate_height_meters();
     double actual_angle = this->get_plate_angle_radians();
 
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "actual_height: %f", actual_height);
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "actual_angle: %f", actual_angle);
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "actual_height: %f", actual_height);
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "actual_angle: %f", actual_angle);
 
     double safe_plate_angle_radians_target_ = 0.0;
     if (fabs(actual_height - MAX_PLATE_HEIGHT_METERS) < 0.01)
@@ -63,41 +72,44 @@ void MecanumbotPlate::update(double dt)
         safe_plate_angle_radians_target_ = plate_angle_radians_target_;
     }
 
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "safe_plate_angle_radians_target_: %f", safe_plate_angle_radians_target_);
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "safe_plate_angle_radians_target_: %f", safe_plate_angle_radians_target_);
 
-    double error_height = plate_height_meters_target_ - actual_height;
-    double error_angle = safe_plate_angle_radians_target_ - actual_angle;
+    // -------------------------------------------
 
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "error_height: %f", error_height);
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "error_angle: %f", error_angle);
+    double error_height = plate_height_meters_target_ - plate_height_meters_target_smoothed_;
+    double error_angle = safe_plate_angle_radians_target_ - plate_angle_radians_target_smoothed_;
+
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "error_height: %f", error_height);
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "error_angle: %f", error_angle);
 
 
     double height_velocity = std::max(-MAX_HEIGHT_M_PER_S, std::min(MAX_HEIGHT_M_PER_S, error_height / dt));
     double angle_velocity = std::max(-MAX_ANGLE_RAD_PER_S, std::min(MAX_ANGLE_RAD_PER_S, error_angle / dt));
 
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "height_velocity: %f", height_velocity);
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "angle_velocity: %f", angle_velocity);
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "height_velocity: %f", height_velocity);
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "angle_velocity: %f", angle_velocity);
 
-    double front_velocity = height_velocity - angle_velocity * ACTUATOR_SEPARATION_METERS / 2.0;
-    double rear_velocity = height_velocity + angle_velocity * ACTUATOR_SEPARATION_METERS / 2.0;
+    plate_height_meters_target_smoothed_ += height_velocity * dt;
+    plate_angle_radians_target_smoothed_ += angle_velocity * dt;
 
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "front_velocity: %f", front_velocity);
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "rear_velocity: %f", rear_velocity);
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "plate_height_meters_target_smoothed_: %f", plate_height_meters_target_smoothed_);
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "plate_angle_radians_target_smoothed_: %f", plate_angle_radians_target_smoothed_);
 
     // ---
+    double height_angle_offset = ACTUATOR_SEPARATION_METERS / 2.0 * tan(plate_angle_radians_target_smoothed_);
 
-    double front_height_meters = position_state_front_.get().get_value();
-    double rear_height_meters = position_state_rear_.get().get_value();
+    double front_height_meters_setpoint = std::max(0.0, std::min(MAX_ACTUATOR_EXTENSION,
+        plate_height_meters_target_smoothed_ + height_angle_offset
+    ));
+    double rear_height_meters_setpoint = std::max(0.0, std::min(MAX_ACTUATOR_EXTENSION,
+        plate_height_meters_target_smoothed_ - height_angle_offset
+    ));
 
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "front_height_meters: %f", front_height_meters);
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "rear_height_meters: %f", rear_height_meters);
-
-    double front_height_meters_setpoint = std::max(0.0, std::min(MAX_ACTUATOR_EXTENSION, front_height_meters + front_velocity * dt));
-    double rear_height_meters_setpoint = std::max(0.0, std::min(MAX_ACTUATOR_EXTENSION, rear_height_meters + rear_velocity * dt));
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "MAX_ACTUATOR_EXTENSION: %f", MAX_ACTUATOR_EXTENSION);
     
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "front_height_meters_setpoint: %f", front_height_meters_setpoint);
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "rear_height_meters_setpoint: %f", rear_height_meters_setpoint);
 
-    position_command_front_.get().set_value(1.0);
-    position_command_rear_.get().set_value(1.0);
+    position_command_front_.get().set_value(front_height_meters_setpoint);
+    position_command_rear_.get().set_value(rear_height_meters_setpoint);
 }

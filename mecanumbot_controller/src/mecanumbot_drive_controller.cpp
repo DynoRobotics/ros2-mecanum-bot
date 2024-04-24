@@ -99,7 +99,7 @@ controller_interface::return_type MecanumbotDriveController::update(const rclcpp
     // TODO: Add the lift motor position here
     auto plate_height_command = plate_height_command_ptr_.readFromRT();
     if (plate_height_command && *plate_height_command) {
-        RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate height in update: %f", (*plate_height_command)->data);
+        // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate height in update: %f", (*plate_height_command)->data);
         plate_->set_plate_height_decimal((*plate_height_command)->data);
     }
 
@@ -183,7 +183,7 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
     // TODO READ UP/DOWN TOPIC FOR LIFT MOTOR
     plate_height_command_subsciption_ = get_node()->create_subscription<Float64>("/plate_lift_controller/trigger_plate", rclcpp::SystemDefaultsQoS(), [this](const Float64::SharedPtr msg)
     {
-        RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate height command message callback: %f", msg->data);
+        // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate height command message callback: %f", msg->data);
         plate_height_command_ptr_.writeFromNonRT(msg);
     });
 

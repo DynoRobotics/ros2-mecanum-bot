@@ -17,6 +17,17 @@ PLUGINLIB_EXPORT_CLASS(
 
 using namespace debict::mecanumbot::hardware;
 
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)  \
+  ((byte) & 0x80 ? '1' : '0'), \
+  ((byte) & 0x40 ? '1' : '0'), \
+  ((byte) & 0x20 ? '1' : '0'), \
+  ((byte) & 0x10 ? '1' : '0'), \
+  ((byte) & 0x08 ? '1' : '0'), \
+  ((byte) & 0x04 ? '1' : '0'), \
+  ((byte) & 0x02 ? '1' : '0'), \
+  ((byte) & 0x01 ? '1' : '0') 
+
 // Constructor
 MecanumbotHardware::MecanumbotHardware()   
   : SystemInterface(),
@@ -409,6 +420,27 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_
 			RCLCPP_WARN_STREAM(rclcpp::get_logger("MecanumbotHardware"), "Waiting to be ready for operation. Status: 0x" << std::hex << CURRENT_STATUSWORD << std::endl);
 			std::this_thread::sleep_for(std::chrono::milliseconds(500));
 		}
+
+        // if (is_lift_motor(info_.joints.at(i))){
+
+        //     CURRENT_STATUSWORD = nanolibHelper.readInteger(*deviceHandle, odStatusWord);            
+        //     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"),
+        //     "Status word before "BYTE_TO_BINARY_PATTERN" "BYTE_TO_BINARY_PATTERN,
+        //     BYTE_TO_BINARY(CURRENT_STATUSWORD>>8), BYTE_TO_BINARY(CURRENT_STATUSWORD));
+
+        //     nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_RUN_LIFT_MOTOR, odControlWord, CONTROL_WORD_BITS);
+
+        //     std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        //     while ((CURRENT_STATUSWORD = nanolibHelper.readInteger(*deviceHandle, odStatusWord)) & (1 < 4) != 1) {
+        //         RCLCPP_WARN_STREAM(rclcpp::get_logger("MecanumbotHardware"), "Waiting for bit 4 to be set");
+        //         RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"),
+        //         "Status word "BYTE_TO_BINARY_PATTERN" "BYTE_TO_BINARY_PATTERN,
+        //         BYTE_TO_BINARY(CURRENT_STATUSWORD>>8), BYTE_TO_BINARY(CURRENT_STATUSWORD));
+
+        //         std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        //     }
+        // }
     }
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_activate done");
@@ -450,6 +482,8 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_deactivate(const rclcp
 
 hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & time, const rclcpp::Duration & period)
 {   
+
+    // return hardware_interface::return_type::OK;
 
     for (size_t i = 0; i < info_.joints.size(); i++) {
 
@@ -494,16 +528,30 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
         // read feedback and put into state variables
         if(is_lift_motor(info_.joints.at(i))){          // lift motor interface states
             try{     // read position and set position state
-                int64_t position = nanolibHelper.readInteger(*deviceHandle, odLiftActualPosition);
+
+
+                int32_t target_position = nanolibHelper.readInteger(*deviceHandle, odLiftTargetPosition);
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Target position: %d", target_position);
+
+
+                int32_t position = nanolibHelper.readInteger(*deviceHandle, odLiftActualPosition);
                 position_states_[i] = lift_positions_to_hight(position);
-                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Position: %ld", position);
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Actual position: %d", position);
+
+                // int16_t status_word = nanolibHelper.readInteger(*deviceHandle, odStatusWord);
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"),
+                // "Status word "BYTE_TO_BINARY_PATTERN" "BYTE_TO_BINARY_PATTERN,
+                // BYTE_TO_BINARY(status_word>>8), BYTE_TO_BINARY(status_word));
+
 
             } catch (const nanolib_exception &e) {
                 RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
             }
         } else{                                         // wheel motor interface states
             try{    // read the actual velocity
-                velocity_states_[i] = nanolibHelper.readInteger(*deviceHandle, odVelocityActualValue);
+                int32_t actual_velocity_ticks = nanolibHelper.readInteger(*deviceHandle, odVelocityActualValue);
+                double actual_velocity_radians_per_second = actual_velocity_ticks / 572.957795131;
+                velocity_states_[i] = actual_velocity_radians_per_second;
             } catch (const nanolib_exception &e) {
                 RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
             }
@@ -515,6 +563,10 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
 
 hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & time, const rclcpp::Duration & period)
 {
+    if (this->get_state().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE)
+    {
+        return hardware_interface::return_type::OK;
+    }
 
     for (size_t i = 0; i < info_.joints.size(); i++) {
         auto deviceHandle = connectedDeviceHandles.at(i);
@@ -530,20 +582,20 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
             // Set target position
             // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Try write to lift motor");
             try{
-                int64_t target_position = lift_hight_to_positions(position_commands_[i]);
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "position command meters: %f", position_commands_[i]);
+
+                int32_t target_position = lift_hight_to_positions(position_commands_[i]);
+
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "position command ticks: %d", target_position);
+
                 nanolibHelper.writeInteger(*deviceHandle, target_position, odLiftTargetPosition, TARGET_POSITION_BITS);
-                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Target position set to %ld", target_position);
+
+                nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR & ~(1<<4), odControlWord, CONTROL_WORD_BITS);
+                nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR | (1<<4), odControlWord, CONTROL_WORD_BITS);
+                
             } catch (const nanolib_exception &e) {
                 RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
             }
-
-            // Set the trigger bit in control word
-            // try{
-            //     nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_RUN_LIFT_MOTOR, odControlWord, CONTROL_WORD_BITS);
-            //     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Control word set to 0x3F to make motor spin");
-            // } catch (const nanolib_exception &e) {
-            //     RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
-            // }
 
             // Store the current position
             position_commands_saved_[i] = position_commands_[i];
@@ -552,7 +604,7 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
             // Set target velocity
             // NOTE: 10 * 180/pi = 572.957795131
             try{
-                nanolibHelper.writeInteger(*deviceHandle, (int64_t)(velocity_commands_[i]*572.957795131), odTargetVelocity, TARGET_VELOCITY_BITS);
+                nanolibHelper.writeInteger(*deviceHandle, (int32_t)(velocity_commands_[i]*572.957795131), odTargetVelocity, TARGET_VELOCITY_BITS);
             } catch (const nanolib_exception &e) {
                 RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
             }

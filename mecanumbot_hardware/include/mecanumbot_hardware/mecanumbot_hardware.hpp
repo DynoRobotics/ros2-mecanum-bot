@@ -104,7 +104,7 @@ namespace debict
                 const unsigned int ERROR_CODE_BITS = 16;
 
                 const nlc::OdIndex odVelocityActualValue;
-                const unsigned int VELOCITY_ACTUAL_VALUE_BITS = 16;
+                const unsigned int VELOCITY_ACTUAL_VALUE_BITS = 32;
 
                 const nlc::OdIndex odLiftActualPosition;
                 const unsigned int LIFT_POSITION_ACTUAL_VALUE_BITS = 32;
