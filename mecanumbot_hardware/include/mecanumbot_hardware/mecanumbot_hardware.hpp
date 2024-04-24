@@ -88,6 +88,7 @@ namespace debict
 
                 const int64_t MODE_POSITION_PROFILE = 0x1;
                 const int64_t MODE_VELOCITY_PROFILE = 0x3;
+                const int64_t MODE_HOMING = 0x6;
 
                 const int64_t LIFT_MOTOR_TOP_POSITION = 3600;
                 const int64_t LIFT_MOTOR_BOTTOM_POSITION = 0;
@@ -111,6 +112,17 @@ namespace debict
 
 
                 // write registers
+                const nlc::OdIndex odHomingSpeedSwitchSearch;
+                const unsigned int HOMING_SPEED_SWITCH_SEARCH_BITS = 32;
+
+                const nlc::OdIndex odHomingSpeedZeroSearch;
+                const unsigned int HOMING_SPEED_ZERO_SEARCH_BITS = 32;
+
+                const nlc::OdIndex odHomingMethod;
+                const unsigned int HOMING_METHOD_BITS = 8;
+
+                const nlc::OdIndex odHomingCurrentThreshold;
+                const unsigned int HOMING_CURRENT_THRESHOLD_BITS = 32;
 
                 const nlc::OdIndex odControlWord;
                 const unsigned int CONTROL_WORD_BITS = 16;
@@ -138,9 +150,6 @@ namespace debict
 
                 const nlc::OdIndex odDecelerationProfile;
                 const unsigned int DECELERATION_PROFILE_BITS = 32;
-
-                const nlc::OdIndex odTmp;
-                const unsigned int TMP_BITS = 32;
 
             };
         }

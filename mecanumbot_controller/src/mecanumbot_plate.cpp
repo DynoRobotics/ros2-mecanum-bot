@@ -107,8 +107,8 @@ void MecanumbotPlate::update(double dt)
 
     // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "MAX_ACTUATOR_EXTENSION: %f", MAX_ACTUATOR_EXTENSION);
     
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "front_height_meters_setpoint: %f", front_height_meters_setpoint);
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "rear_height_meters_setpoint: %f", rear_height_meters_setpoint);
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "front_height_meters_setpoint: %f", front_height_meters_setpoint);
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "rear_height_meters_setpoint: %f", rear_height_meters_setpoint);
 
     position_command_front_.get().set_value(front_height_meters_setpoint);
     position_command_rear_.get().set_value(rear_height_meters_setpoint);
