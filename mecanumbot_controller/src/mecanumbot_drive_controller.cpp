@@ -26,8 +26,11 @@ MecanumbotDriveController::MecanumbotDriveController()
     , linear_x_smoothed_(0.0)
     , linear_y_smoothed_(0.0)
     , angular_z_smoothed_(0.0)
+    , plate_homing_command_subsciption_(nullptr)
+    , plate_homing_command_ptr_(nullptr)
 {
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Construct MecanumbotDriveController");
+    homing_is_active_ = false;
 }
 
 controller_interface::InterfaceConfiguration MecanumbotDriveController::command_interface_configuration() const
@@ -44,6 +47,10 @@ controller_interface::InterfaceConfiguration MecanumbotDriveController::command_
 
     command_interfaces_config.names.push_back(plate_front_joint_name_+ "/" + hardware_interface::HW_IF_POSITION);
     command_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_POSITION);
+
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "GPIO_inputs:  %s", gpio_inputs_.c_str());
+
+    command_interfaces_config.names.push_back(gpio_inputs_ + "/homing_command");
 
     return command_interfaces_config;
 }
@@ -69,12 +76,20 @@ controller_interface::InterfaceConfiguration MecanumbotDriveController::state_in
     state_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_POSITION);
     state_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_VELOCITY);
 
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "GPIO_outputs:  %s", gpio_outputs_.c_str());
+
+    state_interfaces_config.names.push_back(gpio_outputs_ + "/homing_state");
+
     return state_interfaces_config;
 }
 
 controller_interface::CallbackReturn MecanumbotDriveController::on_init()
 {
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "On init for MecanumbotDriveController");
+
+    auto_declare<std::vector<std::string>>("inputs", std::vector<std::string>());
+    auto_declare<std::vector<std::string>>("outputs", std::vector<std::string>());
+
     return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -132,6 +147,16 @@ controller_interface::return_type MecanumbotDriveController::update(const rclcpp
     rr_wheel_->set_velocity(rr_wheel_velocity);
 
     // TODO: Add the lift motor position here
+    auto plate_homing_command = plate_homing_command_ptr_.readFromRT();
+    if (plate_homing_command && *plate_homing_command) {
+        if ((*plate_homing_command)->data && !homing_is_active_) {
+            RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate homing command message callback");
+            homing_is_active_ = true;
+            plate_->set_homing(homing_is_active_);
+            return controller_interface::return_type::OK;
+        }
+    }
+
     auto plate_height_command = plate_height_command_ptr_.readFromRT();
     if (plate_height_command && *plate_height_command) {
         // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate height in update: %f", (*plate_height_command)->data);
@@ -230,6 +255,12 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
         plate_angle_command_ptr_.writeFromNonRT(msg);
     });
 
+    plate_homing_command_subsciption_ = get_node()->create_subscription<std_msgs::msg::Bool>("plate_lift_controller/homing_trigger", rclcpp::SystemDefaultsQoS(), [this](const Bool::SharedPtr msg)
+    {
+        // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate homing command message callback");
+        plate_homing_command_ptr_.writeFromNonRT(msg);
+    });
+
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Configure done for MecanumbotDriveController");
 
     return controller_interface::CallbackReturn::SUCCESS;
@@ -244,9 +275,10 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_activate(cons
     fr_wheel_ = get_wheel(fr_wheel_joint_name_);
     rl_wheel_ = get_wheel(rl_wheel_joint_name_);
     rr_wheel_ = get_wheel(rr_wheel_joint_name_);
-    plate_ = get_plate(plate_front_joint_name_, plate_rear_joint_name_);
+    plate_ = get_plate(plate_front_joint_name_, plate_rear_joint_name_, gpio_inputs_, gpio_inputs_);
 
-    if (!fl_wheel_ || !fr_wheel_ || !rl_wheel_ || !rr_wheel_/* || !plate_*/) {
+    if (!fl_wheel_ || !fr_wheel_ || !rl_wheel_ || !rr_wheel_ || !plate_) {
+        RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "failed to initialize wheels and/or plate");
         return controller_interface::CallbackReturn::ERROR;
     }
 
@@ -334,8 +366,8 @@ std::shared_ptr<MecanumbotWheel> MecanumbotDriveController::get_wheel(const std:
         );
 }
 
-std::shared_ptr<MecanumbotPlate> MecanumbotDriveController::get_plate(const std::string & plate_front_joint_name, const std::string & plate_rear_joint_name)
-{
+std::shared_ptr<MecanumbotPlate> MecanumbotDriveController::get_plate(const std::string & plate_front_joint_name, const std::string & plate_rear_joint_name, 
+                                                                      const std::string & gpio_inputs_, const std::string & gpio_outputs_){
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Get plate MecanumbotDriveController");
 
     // Lookup the position state interface
@@ -408,6 +440,30 @@ std::shared_ptr<MecanumbotPlate> MecanumbotDriveController::get_plate(const std:
         return nullptr;
     }
 
+    // Lookup the hardware_gpio_out state interface
+    const auto plate_homing_state = "plate_homing_gpio/state";
+    // const auto plate_homing_state = std::find_if(gpio_inputs_.cbegin(), gpio_inputs_.cend(), [&gpio_outputs_](const hardware_interface::LoanedStateInterface & interface)
+    // {
+    //     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "state interface name: %s", interface.get_name().c_str());
+    //     return interface.get_name() == "plate_homing_gpio/state";
+    // });
+    // if (plate_homing_state == plate_homing_state.cend()) {
+    //     RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "%s hardware_gpio state interface not found", gpio_outputs_.c_str());
+    //     return nullptr;
+    // }
+
+    // Lookup the hardware_gpio_in command interface
+    const auto plate_homing_command = "plate_homing_gpio/state";
+    // const auto plate_homing_command = std::find_if(gpio_outputs_.begin(), gpio_outputs_.end(), [&gpio_outputs_](const hardware_interface::LoanedCommandInterface & interface)
+    // {
+    //     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "command interface name: %s", interface.get_name().c_str());
+    //     return interface.get_name() == "plate_homing_gpio/state";
+    // });
+    // if (plate_homing_command == command_interfaces_.end()) {
+    //     RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "%s hardware_gpio command interface not found", gpio_inputs_.c_str());
+    //     return nullptr;
+    // }
+
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Get plate done MecanumbotDriveController");
 
     return std::make_shared<MecanumbotPlate>(
@@ -415,8 +471,10 @@ std::shared_ptr<MecanumbotPlate> MecanumbotDriveController::get_plate(const std:
         std::ref(*plate_rear_position_state),
         std::ref(*plate_front_velocity_state),
         std::ref(*plate_rear_velocity_state),
+        std::ref(*plate_homing_state),
         std::ref(*plate_front_position_command),
-        std::ref(*plate_rear_position_command)
+        std::ref(*plate_rear_position_command),
+        std::ref(*plate_homing_command)
         );
 }
 
@@ -429,6 +487,7 @@ bool MecanumbotDriveController::reset()
     velocity_command_subsciption_.reset();
     plate_height_command_subsciption_.reset();
     plate_angle_command_subsciption_.reset();
+    plate_homing_command_subsciption_.reset();
 
     fl_wheel_.reset();
     fr_wheel_.reset();

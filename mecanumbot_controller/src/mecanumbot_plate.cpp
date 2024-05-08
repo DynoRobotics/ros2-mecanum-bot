@@ -9,15 +9,19 @@ MecanumbotPlate::MecanumbotPlate(
     std::reference_wrapper<const hardware_interface::LoanedStateInterface> position_state_rear,
     std::reference_wrapper<const hardware_interface::LoanedStateInterface> velocity_state_front,
     std::reference_wrapper<const hardware_interface::LoanedStateInterface> velocity_state_rear,
+    std::reference_wrapper<const hardware_interface::LoanedStateInterface> hardware_gpio_out,
     std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_front,
-    std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_rear
+    std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_rear,
+    std::reference_wrapper<hardware_interface::LoanedCommandInterface> hardware_gpio_in
     )
     : position_state_front_(position_state_front)
     , position_state_rear_(position_state_rear)
     , velocity_state_front_(velocity_state_front)
     , velocity_state_rear_(velocity_state_rear)
+    , hardware_gpio_out_(hardware_gpio_out)
     , position_command_front_(position_command_front)
     , position_command_rear_(position_command_rear)
+    , hardware_gpio_in_(hardware_gpio_in)
     , MAX_PLATE_HEIGHT_METERS(MAX_ACTUATOR_EXTENSION - ACTUATOR_SEPARATION_METERS * tan(MAX_PLATE_ANGLE_RADIANS) / 2.0)
 {
 
@@ -32,6 +36,11 @@ void MecanumbotPlate::set_plate_angle_radians(double value)
 {
     plate_angle_radians_target_ = std::max(-MAX_PLATE_ANGLE_RADIANS, std::min(MAX_PLATE_ANGLE_RADIANS, value));
 }
+
+void MecanumbotPlate::set_homing(bool value){
+    perform_homing_ = value;
+}
+
 
 double MecanumbotPlate::get_plate_height_meters()
 {
@@ -52,8 +61,8 @@ double MecanumbotPlate::get_plate_angle_radians()
 void MecanumbotPlate::update(double dt)
 {
     // -------------------------------------------
-    double front_height_meters = position_state_front_.get().get_value();
-    double rear_height_meters = position_state_rear_.get().get_value();
+    // double front_height_meters = position_state_front_.get().get_value();
+    // double rear_height_meters = position_state_rear_.get().get_value();
 
     // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "front_height_meters: %f", front_height_meters);
     // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "rear_height_meters: %f", rear_height_meters);

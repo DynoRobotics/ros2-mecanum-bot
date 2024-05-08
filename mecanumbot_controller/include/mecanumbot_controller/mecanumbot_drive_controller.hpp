@@ -8,6 +8,7 @@
 #include <realtime_tools/realtime_buffer.h>
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <std_msgs/msg/float64.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <string>
 
 #include "mecanumbot_controller/mecanumbot_plate.hpp"
@@ -22,6 +23,7 @@ namespace debict
         {
             using Twist = geometry_msgs::msg::Twist;
             using Float64 = std_msgs::msg::Float64;
+            using Bool = std_msgs::msg::Bool;
 
             class MecanumbotDriveController
                 : public controller_interface::ControllerInterface
@@ -63,7 +65,8 @@ namespace debict
             protected:
                 std::shared_ptr<MecanumbotWheel> get_wheel(const std::string & wheel_joint_name);
 
-                std::shared_ptr<MecanumbotPlate> get_plate(const std::string & plate_front_joint_name, const std::string & plate_rear_joint_name);
+                std::shared_ptr<MecanumbotPlate> get_plate(const std::string & plate_front_joint_name, const std::string & plate_rear_joint_name,
+                                                           const std::string & gpio_input_name, const std::string & gpio_output_name);
 
                 bool reset();
 
@@ -80,6 +83,9 @@ namespace debict
                 rclcpp::Subscription<Float64>::SharedPtr plate_angle_command_subsciption_;
                 realtime_tools::RealtimeBuffer<std::shared_ptr<Float64>> plate_angle_command_ptr_;
 
+                rclcpp::Subscription<Bool>::SharedPtr plate_homing_command_subsciption_;
+                realtime_tools::RealtimeBuffer<std::shared_ptr<Bool>> plate_homing_command_ptr_;
+
                 std::shared_ptr<MecanumbotWheel> fl_wheel_;
                 std::shared_ptr<MecanumbotWheel> fr_wheel_;
                 std::shared_ptr<MecanumbotWheel> rl_wheel_;
@@ -92,6 +98,8 @@ namespace debict
                 std::string rr_wheel_joint_name_;
                 std::string plate_front_joint_name_;
                 std::string plate_rear_joint_name_;
+                std::string gpio_inputs_;
+                std::string gpio_outputs_;
                 
                 double linear_scale_;
                 double radial_scale_;
@@ -101,6 +109,7 @@ namespace debict
                 double wheel_separation_width_;
                 double wheel_separation_length_;
                 bool subscriber_is_active_;
+                bool homing_is_active_;
 
                 double linear_x_target_;
                 double linear_y_target_;

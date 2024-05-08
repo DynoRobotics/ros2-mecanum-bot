@@ -20,12 +20,15 @@ namespace debict
                     std::reference_wrapper<const hardware_interface::LoanedStateInterface> position_state_rear,
                     std::reference_wrapper<const hardware_interface::LoanedStateInterface> velocity_state_front,
                     std::reference_wrapper<const hardware_interface::LoanedStateInterface> velocity_state_rear,
+                    std::reference_wrapper<const hardware_interface::LoanedStateInterface> hardware_gpio_out,
                     std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_front,
-                    std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_rear
+                    std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_rear,
+                    std::reference_wrapper<hardware_interface::LoanedCommandInterface> hardware_gpio_in
                     );
 
                 void set_plate_height_decimal(double value);
                 void set_plate_angle_radians(double value);
+                void set_homing(bool value);
                 void update(double dt);
 
                 double get_plate_height_meters();
@@ -36,8 +39,12 @@ namespace debict
                 std::reference_wrapper<const hardware_interface::LoanedStateInterface> position_state_rear_;
                 std::reference_wrapper<const hardware_interface::LoanedStateInterface> velocity_state_front_;
                 std::reference_wrapper<const hardware_interface::LoanedStateInterface> velocity_state_rear_;
+                std::reference_wrapper<const hardware_interface::LoanedStateInterface> hardware_gpio_out_;
                 std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_front_;
                 std::reference_wrapper<hardware_interface::LoanedCommandInterface> position_command_rear_;
+                std::reference_wrapper<hardware_interface::LoanedCommandInterface> hardware_gpio_in_;
+
+                bool perform_homing_{false};
 
                 double plate_height_meters_target_{0.0};
                 double plate_angle_radians_target_{0.0};

@@ -63,6 +63,8 @@ namespace debict
                 virtual hardware_interface::return_type write(const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
             private:
+                void perform_homing();
+
                 std::vector<size_t> motor_ids_;
                 std::vector<double> position_states_;
                 std::vector<double> velocity_states_;
@@ -70,6 +72,8 @@ namespace debict
                 std::vector<double> velocity_commands_saved_;
                 std::vector<double> position_commands_; // stored in meter
                 std::vector<double> position_commands_saved_;
+                std::vector<double> hardware_gpio_in;
+                std::vector<double> hardware_gpio_out;
 
                 std::string network_interface_name_;
                 std::string network_interface_protocol_;
