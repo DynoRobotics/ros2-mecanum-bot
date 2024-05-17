@@ -212,6 +212,19 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
         return controller_interface::CallbackReturn::ERROR;
     }
 
+    gpio_inputs_ = get_node()->get_parameter("gpio_inputs").as_string();
+    gpio_outputs_ = get_node()->get_parameter("gpio_outputs").as_string();
+
+    if (gpio_inputs_.empty()) {
+        RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "'gpio_inputs' parameter was empty");
+        return controller_interface::CallbackReturn::ERROR;
+    }
+
+    if (gpio_outputs_.empty()) {
+        RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "'gpio_outputs' parameter was empty");
+        return controller_interface::CallbackReturn::ERROR;
+    }
+
     wheel_radius_ = get_node()->get_parameter("wheel_radius").as_double();
     wheel_distance_width_ = get_node()->get_parameter("wheel_distance.width").as_double();
     wheel_distance_length_ = get_node()->get_parameter("wheel_distance.length").as_double();
@@ -441,28 +454,26 @@ std::shared_ptr<MecanumbotPlate> MecanumbotDriveController::get_plate(const std:
     }
 
     // Lookup the hardware_gpio_out state interface
-    const auto plate_homing_state = "plate_homing_gpio/state";
-    // const auto plate_homing_state = std::find_if(gpio_inputs_.cbegin(), gpio_inputs_.cend(), [&gpio_outputs_](const hardware_interface::LoanedStateInterface & interface)
-    // {
-    //     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "state interface name: %s", interface.get_name().c_str());
-    //     return interface.get_name() == "plate_homing_gpio/state";
-    // });
-    // if (plate_homing_state == plate_homing_state.cend()) {
-    //     RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "%s hardware_gpio state interface not found", gpio_outputs_.c_str());
-    //     return nullptr;
-    // }
+    const auto plate_homing_state = std::find_if(state_interfaces_.cbegin(), state_interfaces_.cend(), [&gpio_outputs_](const hardware_interface::LoanedStateInterface & interface)
+    {
+        RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "state interface name: %s", interface.get_name().c_str());
+        return interface.get_name() == "plate_homing_gpio/homing_state";
+    });
+    if (plate_homing_state == state_interfaces_.cend()) {
+        RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "%s hardware_gpio state interface not found", gpio_outputs_.c_str());
+        return nullptr;
+    }
 
     // Lookup the hardware_gpio_in command interface
-    const auto plate_homing_command = "plate_homing_gpio/state";
-    // const auto plate_homing_command = std::find_if(gpio_outputs_.begin(), gpio_outputs_.end(), [&gpio_outputs_](const hardware_interface::LoanedCommandInterface & interface)
-    // {
-    //     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "command interface name: %s", interface.get_name().c_str());
-    //     return interface.get_name() == "plate_homing_gpio/state";
-    // });
-    // if (plate_homing_command == command_interfaces_.end()) {
-    //     RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "%s hardware_gpio command interface not found", gpio_inputs_.c_str());
-    //     return nullptr;
-    // }
+    const auto plate_homing_command = std::find_if(command_interfaces_.begin(), command_interfaces_.end(), [&gpio_inputs_](const hardware_interface::LoanedCommandInterface & interface)
+    {
+        RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "command interface name: %s", interface.get_name().c_str());
+        return interface.get_name() == "plate_homing_gpio/homing_command";
+    });
+    if (plate_homing_command == command_interfaces_.end()) {
+        RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "%s hardware_gpio command interface not found", gpio_inputs_.c_str());
+        return nullptr;
+    }
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Get plate done MecanumbotDriveController");
 

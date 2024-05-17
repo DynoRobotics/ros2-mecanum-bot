@@ -726,7 +726,7 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
         }
 
         // check if hardware gpio in changed
-        if(hardware_gpio_out[0] != 1.0 && hardware_gpio_in[0] == 55.0){
+        if(hardware_gpio_out[0] != 1.0 && hardware_gpio_in[0] == 1.0){
             try{
                 perform_homing();
             } catch (const nanolib_exception &e) {
