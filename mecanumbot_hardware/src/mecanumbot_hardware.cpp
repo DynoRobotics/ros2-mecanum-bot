@@ -302,7 +302,7 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
 
                     // Establishing a connection with the device
                     RCLCPP_INFO_STREAM(rclcpp::get_logger("MecanumbotHardware"),
-                        "Connecting joint name " << joint_name << " to nanotec device " << deviceId.getDescription());
+                        "Connecting joint name " << joint_name << " to nanotec device id " << deviceId.getDeviceId() << ", " << deviceId.getDescription());
                     nanolibHelper.connectDevice(deviceHandle);
 
                     // Store handle for later
@@ -646,7 +646,13 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
             // Set target velocity
             // NOTE: 10 * 180/pi = 572.957795131
             try{
-                nanolibHelper.writeInteger(*deviceHandle, (int32_t)(velocity_commands_[i]*572.957795131), odTargetVelocity, TARGET_VELOCITY_BITS);
+                double v = velocity_commands_[i];
+                std::string name = info_.joints.at(i).name;
+                if (name.find("left") != std::string::npos) {
+                    // hack to reverse direction of left motors
+                    v = -v;
+                }
+                nanolibHelper.writeInteger(*deviceHandle, (int32_t)(v*572.957795131), odTargetVelocity, TARGET_VELOCITY_BITS);
             } catch (const nanolib_exception &e) {
                 RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
             }

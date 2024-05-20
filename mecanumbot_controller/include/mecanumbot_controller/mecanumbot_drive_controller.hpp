@@ -68,6 +68,9 @@ namespace debict
                 bool reset();
 
             protected:
+                // timestamp of when we received the last command
+                rclcpp::Time last_command_timestamp_;
+
                 rclcpp::Subscription<Twist>::SharedPtr velocity_command_subsciption_;
                 realtime_tools::RealtimeBuffer<std::shared_ptr<Twist>> velocity_command_ptr_;
 
@@ -98,6 +101,13 @@ namespace debict
                 double wheel_separation_width_;
                 double wheel_separation_length_;
                 bool subscriber_is_active_;
+
+                double linear_x_target_;
+                double linear_y_target_;
+                double angular_z_target_;
+                double linear_x_smoothed_;
+                double linear_y_smoothed_;
+                double angular_z_smoothed_;
 
             };
         }

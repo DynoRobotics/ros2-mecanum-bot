@@ -20,6 +20,12 @@ MecanumbotDriveController::MecanumbotDriveController()
     , plate_height_command_ptr_(nullptr)
     , plate_angle_command_subsciption_(nullptr)
     , plate_angle_command_ptr_(nullptr)
+    , linear_x_target_(0.0)
+    , linear_y_target_(0.0)
+    , angular_z_target_(0.0)
+    , linear_x_smoothed_(0.0)
+    , linear_y_smoothed_(0.0)
+    , angular_z_smoothed_(0.0)
 {
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Construct MecanumbotDriveController");
 }
@@ -78,23 +84,52 @@ controller_interface::return_type MecanumbotDriveController::update(const rclcpp
 
     // Get the last velocity command
     auto velocity_command = velocity_command_ptr_.readFromRT();
-    if (velocity_command && *velocity_command) {     
-        // Calculate the wheel velocity
-        // See: http://robotsforroboticists.com/drive-kinematics/
+    bool velocity_command_is_timeout = (get_node()->now() - last_command_timestamp_).seconds() > 1.0;
 
-        auto linear = (*velocity_command)->linear;
-        auto angular = (*velocity_command)->angular;
-
-        double fl_wheel_velocity = (1 / wheel_radius_) * (linear.x - linear.y - (wheel_separation_width_ + wheel_separation_length_) * angular.z);
-        double fr_wheel_velocity = (1 / wheel_radius_) * (linear.x + linear.y + (wheel_separation_width_ + wheel_separation_length_) * angular.z);
-        double rl_wheel_velocity = (1 / wheel_radius_) * (linear.x + linear.y - (wheel_separation_width_ + wheel_separation_length_) * angular.z);
-        double rr_wheel_velocity = (1 / wheel_radius_) * (linear.x - linear.y + (wheel_separation_width_ + wheel_separation_length_) * angular.z);
-
-        fl_wheel_->set_velocity(fl_wheel_velocity);
-        fr_wheel_->set_velocity(fr_wheel_velocity);
-        rl_wheel_->set_velocity(rl_wheel_velocity);
-        rr_wheel_->set_velocity(rr_wheel_velocity);
+    if (velocity_command_is_timeout) {
+        // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Velocity command timeout");
+        linear_x_target_ = 0.0;
+        linear_y_target_ = 0.0;
+        angular_z_target_ = 0.0;
+    } else {
+        if (velocity_command && *velocity_command) {
+            auto linear = (*velocity_command)->linear;
+            auto angular = (*velocity_command)->angular;
+            linear_x_target_ = linear.x;
+            linear_y_target_ = linear.y;
+            angular_z_target_ = angular.z;
+        }
     }
+
+    // Make smooth commands
+    linear_x_smoothed_ += (linear_x_target_ - linear_x_smoothed_) * 0.2;
+    linear_y_smoothed_ += (linear_y_target_ - linear_y_smoothed_) * 0.2;
+    angular_z_smoothed_ += (angular_z_target_ - angular_z_smoothed_) * 0.2;
+
+    double lx = linear_x_smoothed_;
+    double ly = linear_y_smoothed_;
+    double az = angular_z_smoothed_;
+    if (std::abs(lx) < 1e-3) {
+        lx = 0.0;
+    }
+    if (std::abs(ly) < 1e-3) {
+        ly = 0.0;
+    }
+    if (std::abs(az) < 1e-3) {
+        az = 0.0;
+    }
+
+    // Calculate the wheel velocity
+    // See: http://robotsforroboticists.com/drive-kinematics/
+    double fl_wheel_velocity = (1 / wheel_radius_) * (lx - ly - (wheel_separation_width_ + wheel_separation_length_) * az);
+    double fr_wheel_velocity = (1 / wheel_radius_) * (lx + ly + (wheel_separation_width_ + wheel_separation_length_) * az);
+    double rl_wheel_velocity = (1 / wheel_radius_) * (lx + ly - (wheel_separation_width_ + wheel_separation_length_) * az);
+    double rr_wheel_velocity = (1 / wheel_radius_) * (lx - ly + (wheel_separation_width_ + wheel_separation_length_) * az);
+
+    fl_wheel_->set_velocity(fl_wheel_velocity);
+    fr_wheel_->set_velocity(fr_wheel_velocity);
+    rl_wheel_->set_velocity(rl_wheel_velocity);
+    rr_wheel_->set_velocity(rr_wheel_velocity);
 
     // TODO: Add the lift motor position here
     auto plate_height_command = plate_height_command_ptr_.readFromRT();
@@ -178,7 +213,9 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
     velocity_command_subsciption_ = get_node()->create_subscription<Twist>("/mecanum_controller/cmd_vel_unstamped", rclcpp::SystemDefaultsQoS(), [this](const Twist::SharedPtr twist)
     {
         velocity_command_ptr_.writeFromNonRT(twist);
+        last_command_timestamp_ = this->get_node()->now();
     });
+    last_command_timestamp_ = this->get_node()->now() - rclcpp::Duration(std::chrono::seconds(10));
 
     // TODO READ UP/DOWN TOPIC FOR LIFT MOTOR
     plate_height_command_subsciption_ = get_node()->create_subscription<Float64>("/plate_lift_controller/trigger_plate", rclcpp::SystemDefaultsQoS(), [this](const Float64::SharedPtr msg)
