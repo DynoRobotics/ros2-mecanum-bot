@@ -131,6 +131,18 @@ namespace debict
                 const nlc::OdIndex odMaxMotorCurrent;
                 const unsigned int MAX_MOTOR_CURRENT_BITS = 32;
 
+                const nlc::OdIndex odLimitSwitchErrorOptionCode;
+                const unsigned int LIMIT_SWITCH_ERROR_OPTION_CODE_BITS = 16;
+
+                const nlc::OdIndex odDigitalInputRouting;
+                const unsigned int DIGITAL_INPUT_ROUTING_BITS = 8;
+
+                const nlc::OdIndex odDigitalInputsControlInterlock;
+                const unsigned int DIGITAL_INPUTS_CONTROL_INTERLOCK_BITS = 32;
+
+                const nlc::OdIndex odDigitalInputsControlEnabled;
+                const unsigned int DIGITAL_INPUTS_CONTROL_ENABLED_BITS = 32;
+
                 const nlc::OdIndex odControlWord;
                 const unsigned int CONTROL_WORD_BITS = 16;
 

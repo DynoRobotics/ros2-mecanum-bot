@@ -42,6 +42,10 @@ MecanumbotHardware::MecanumbotHardware()
     odHomingMethod(0x6098, 0x00),
     odHomingCurrentThreshold(0x203a, 0x01),
     odMaxMotorCurrent(0x2031, 0x00),
+    odLimitSwitchErrorOptionCode(0x3701, 0x00),
+    odDigitalInputRouting(0x3242, 0x04),
+    odDigitalInputsControlInterlock(0x3240, 0x01),
+    odDigitalInputsControlEnabled(0x3240, 0x08),
     odControlWord(0x6040, 0x00),
     odModesOfOperation(0x6060, 0x00),
     odStatusWord(0x6041, 0x00),
@@ -373,7 +377,10 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
 
                     // Set default values for lift motor
                     if(is_lift_motor(joint)){
-                        
+                        // Max acceleration 0x60C5
+                        // Max deceleration 0x60C6
+                        // Max motor current
+                        // Software position limit 0x607D
                     } else { // Default values for wheel motors
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Setting default values for wheel motor");
                         int max_acceleration{1000000};
@@ -393,6 +400,16 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         int max_motor_current{500};
                         nanolibHelper.writeInteger(deviceHandle, max_motor_current, odMaxMotorCurrent, MAX_MOTOR_CURRENT_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max motor current set to %d", max_motor_current);
+
+                        // Enable hardware emergency stop for both motor types
+                        // nanolibHelper.writeInteger(deviceHandle, 0, odLimitSwitchErrorOptionCode, LIMIT_SWITCH_ERROR_OPTION_CODE_BITS);
+                        // RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Emergency break mode set to Braking with quick stop ramp");
+                        // nanolibHelper.writeInteger(deviceHandle, 8, odDigitalInputRouting, DIGITAL_INPUT_ROUTING_BITS);
+                        // RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Digital input routing, digital input 3 set to hardware input 1");
+                        // nanolibHelper.writeInteger(deviceHandle, 1, odDigitalInputsControlInterlock, DIGITAL_INPUTS_CONTROL_INTERLOCK_BITS);
+                        // RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Digital input control set to Interlock");
+                        // nanolibHelper.writeInteger(deviceHandle, 1, odDigitalInputsControlEnabled, DIGITAL_INPUTS_CONTROL_ENABLED_BITS);
+                        // RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Digital input control Enabled");
                     }
                 }
             }
