@@ -83,7 +83,7 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_init(const hardware_in
     }
 
     // info_.hardware_parameters are empty for me, seems to be bugged? enp5s0
-    network_interface_name_ = "enp5s0 (Ethernet interface)"; // "enp86s0 (Ethernet interface)"; // info_.hardware_parameters["network_interface_name"];
+    network_interface_name_ = "enp86s0 (Ethernet interface)"; // "enp86s0 (Ethernet interface)"; // info_.hardware_parameters["network_interface_name"];
     network_interface_protocol_ = "RESTful API"; // info_.hardware_parameters["network_interface_protocol"];
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Network interface name: '%s'", network_interface_name_.c_str());
@@ -378,9 +378,20 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_
             continue;
         }
 
+        // Check the current status
+        (CURRENT_STATUSWORD = (nanolibHelper.readInteger(*deviceHandle, odStatusWord) & 0x6F));
+
         // Go it state "switched on disabled" if stuck in another state
-        nanolibHelper.writeInteger(*deviceHandle, 0x0, odControlWord, CONTROL_WORD_BITS);
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        if (CURRENT_STATUSWORD & 0b1000) {
+            // If we are in a faulty state
+            const int64_t asd = (int64_t)0b10000000;
+            nanolibHelper.writeInteger(*deviceHandle, asd, odControlWord, CONTROL_WORD_BITS);
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        } else {
+            // if we are in another state
+            nanolibHelper.writeInteger(*deviceHandle, 0x0, odControlWord, CONTROL_WORD_BITS);
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
 
 		// Set velocity profile
         if(is_lift_motor(info_.joints.at(i))){
@@ -426,7 +437,7 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_
 
         // HOMING
 
-        if (is_lift_motor(info_.joints.at(i)))
+        if (false && is_lift_motor(info_.joints.at(i)))
         {
             // set homing current (mA) treshhold
             nanolibHelper.writeInteger(*deviceHandle, 200, odHomingCurrentThreshold, HOMING_CURRENT_THRESHOLD_BITS);
@@ -570,18 +581,18 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
             try{     // read position and set position state
 
 
-                int32_t target_position = nanolibHelper.readInteger(*deviceHandle, odLiftTargetPosition);
-                RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Target position: %d", target_position);
+                // int32_t target_position = nanolibHelper.readInteger(*deviceHandle, odLiftTargetPosition);
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Target position: %d", target_position);
 
 
-                int32_t position = nanolibHelper.readInteger(*deviceHandle, odLiftActualPosition);
-                position_states_[i] = lift_positions_to_hight(position);
-                RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Actual position: %d", position);
+                // int32_t position = nanolibHelper.readInteger(*deviceHandle, odLiftActualPosition);
+                // position_states_[i] = lift_positions_to_hight(position);
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Actual position: %d", position);
 
-                int16_t status_word = nanolibHelper.readInteger(*deviceHandle, odStatusWord);
-                RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"),
-                "Status word "BYTE_TO_BINARY_PATTERN" "BYTE_TO_BINARY_PATTERN,
-                BYTE_TO_BINARY(status_word>>8), BYTE_TO_BINARY(status_word));
+                // int16_t status_word = nanolibHelper.readInteger(*deviceHandle, odStatusWord);
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"),
+                // "Status word "BYTE_TO_BINARY_PATTERN" "BYTE_TO_BINARY_PATTERN,
+                // BYTE_TO_BINARY(status_word>>8), BYTE_TO_BINARY(status_word));
 
 
             } catch (const nanolib_exception &e) {
