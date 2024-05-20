@@ -128,6 +128,9 @@ namespace debict
                 const nlc::OdIndex odHomingCurrentThreshold;
                 const unsigned int HOMING_CURRENT_THRESHOLD_BITS = 32;
 
+                const nlc::OdIndex odMaxMotorCurrent;
+                const unsigned int MAX_MOTOR_CURRENT_BITS = 32;
+
                 const nlc::OdIndex odControlWord;
                 const unsigned int CONTROL_WORD_BITS = 16;
 

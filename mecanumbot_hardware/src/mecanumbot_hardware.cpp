@@ -41,6 +41,7 @@ MecanumbotHardware::MecanumbotHardware()
     odHomingSpeedZeroSearch(0x6099, 0x02),
     odHomingMethod(0x6098, 0x00),
     odHomingCurrentThreshold(0x203a, 0x01),
+    odMaxMotorCurrent(0x2031, 0x00),
     odControlWord(0x6040, 0x00),
     odModesOfOperation(0x6060, 0x00),
     odStatusWord(0x6041, 0x00),
@@ -328,7 +329,7 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
 		RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Scanning bus for devices...");
 
         //TODO REMOVE
-        return hardware_interface::CallbackReturn::SUCCESS;
+        // return hardware_interface::CallbackReturn::SUCCESS;
 
 		std::vector<nlc::DeviceId> deviceIds = nanolibHelper.scanBus(busHwId);
 
@@ -372,9 +373,9 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
 
                     // Set default values for lift motor
                     if(is_lift_motor(joint)){
-                        // TODO: Set default values for lift motors
+                        
                     } else { // Default values for wheel motors
-                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Setting default values for motor");
+                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Setting default values for wheel motor");
                         int max_acceleration{1000000};
                         nanolibHelper.writeInteger(deviceHandle, max_acceleration, odMaxAcceleration, MAX_ACCELERATION_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max acceleration set to %d", max_acceleration);
@@ -388,6 +389,10 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         int deceleration_profile{300000};
                         nanolibHelper.writeInteger(deviceHandle, deceleration_profile, odDecelerationProfile, DECELERATION_PROFILE_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max deceleration profile set to %d", deceleration_profile);
+
+                        int max_motor_current{500};
+                        nanolibHelper.writeInteger(deviceHandle, max_motor_current, odMaxMotorCurrent, MAX_MOTOR_CURRENT_BITS);
+                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max motor current set to %d", max_motor_current);
                     }
                 }
             }
@@ -415,6 +420,8 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_cleanup(const rclcpp_l
 			nanolibHelper.disconnectDevice(*deviceHandle);
 		}
 	}
+
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Disconnecting nanotec bus...");
 
 	if (openedBusHardware.has_value()) {
         RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Disconnecting nanotec bus...");
@@ -510,28 +517,37 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_deactivate(const rclcp
     UNUSED(previous_state);
 
 
-	for (auto deviceHandle : connectedDeviceHandles)
+	for (size_t i = 0; i < info_.joints.size(); i++)
 	{
+        auto deviceHandle = connectedDeviceHandles.at(i);
+
 		if (!deviceHandle.has_value()) {
             RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Device handle is not set");
             continue;
         }
 
-		// Zero velocity
-		nanolibHelper.writeInteger(*deviceHandle, 0, odTargetVelocity, TARGET_VELOCITY_BITS);
+        if (!is_lift_motor(info_.joints.at(i))) {
+            // Zero velocity
+            nanolibHelper.writeInteger(*deviceHandle, 0, odTargetVelocity, TARGET_VELOCITY_BITS);
+        }
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-	for (auto deviceHandle : connectedDeviceHandles)
+	for (size_t i = 0; i < info_.joints.size(); i++)
 	{
+        auto deviceHandle = connectedDeviceHandles.at(i);
+
 		if (!deviceHandle.has_value()) {
             RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Device handle is not set");
             continue;
         }
 
-		// Stop state machine
-		nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_STOP_MOTOR, odControlWord, CONTROL_WORD_BITS);
+        if (!is_lift_motor(info_.joints.at(i))) {   // Stop wheel motor
+            nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_STOP_MOTOR, odControlWord, CONTROL_WORD_BITS);
+        } else {                                    // Stop lift motor
+            nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_STOP_MOTOR, odControlWord, CONTROL_WORD_BITS);
+        }
     }
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware stopped");
@@ -588,7 +604,6 @@ void MecanumbotHardware::perform_homing(){
 }
 
 hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & time, const rclcpp::Duration & period){   
-    // return hardware_interface::return_type::OK;
     UNUSED(time);
     UNUSED(period);
 
@@ -640,7 +655,8 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
 
                 // check bit 13, 12 and 10 in status word to see if homing is complete
                 if(((status_word >> 12) & 1) == 1){
-                    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing complete");
+                    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing complete");
+                    RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Homing complete");
                     hardware_gpio_out[0] = 1;
                 }
 
@@ -656,6 +672,12 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
             } catch (const nanolib_exception &e) {
                 RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
             }
+            // try{ // read the max motor current
+            //     int32_t max_motor_current = nanolibHelper.readInteger(*deviceHandle, odMaxMotorCurrent);
+            //     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Max motor current: %d", max_motor_current);
+            // } catch (const nanolib_exception &e) {
+            //     RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
+            // }
         }
 
     }
@@ -665,7 +687,6 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
 
 hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & time, const rclcpp::Duration & period)
 {
-    // return hardware_interface::return_type::OK;
     UNUSED(time);
     UNUSED(period);
 
