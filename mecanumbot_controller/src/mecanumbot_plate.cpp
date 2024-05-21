@@ -61,20 +61,20 @@ double MecanumbotPlate::get_plate_angle_radians()
 void MecanumbotPlate::update(double dt)
 {
     // TODO: Maybe add this back if homing state works
-    // double is_home = hardware_gpio_out_.get().get_value();
+    double is_home = hardware_gpio_out_.get().get_value();
     // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Is home value: %f", is_home);
-    // if (is_home == 0.0)
-    // {
-    //     if (perform_homing_)
-    //     {
-    //         hardware_gpio_in_.get().set_value(1.0);
-    //     }
+    if (is_home == 0.0)
+    {
+        if (perform_homing_)
+        {
+            hardware_gpio_in_.get().set_value(1.0);
+        }
 
-    //     return;
-    // } else {
-    //     hardware_gpio_in_.get().set_value(0.0);
-    //     perform_homing_ = false;
-    // }
+        return;
+    } else {
+        hardware_gpio_in_.get().set_value(0.0);
+        perform_homing_ = false;
+    }
 
     // -------------------------------------------
     // double front_height_meters = position_state_front_.get().get_value();

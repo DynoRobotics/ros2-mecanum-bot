@@ -63,10 +63,7 @@ namespace debict
                 virtual hardware_interface::return_type write(const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
             private:
-                void perform_homing(size_t index);
-
-                bool front_lift_home_ = false;
-                bool rear_lift_home_ = false;
+                void perform_homing();
 
                 std::vector<size_t> motor_ids_;
                 std::vector<double> position_states_;

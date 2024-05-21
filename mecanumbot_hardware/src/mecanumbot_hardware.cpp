@@ -413,6 +413,18 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         int64_t max_duration_of_max_current = nanolibHelper.readInteger(deviceHandle, odLiftMaximumDurationOfMaxCurrent);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Lift motor max duration of max current: %ld", max_duration_of_max_current);
 
+                        // HOMING RELATED CONFIG
+
+                        // set homing current (mA) treshhold
+                        nanolibHelper.writeInteger(deviceHandle, 200, odHomingCurrentThreshold, HOMING_CURRENT_THRESHOLD_BITS);
+
+                        // set homing method
+                        nanolibHelper.writeInteger(deviceHandle, -17, odHomingMethod, HOMING_METHOD_BITS);
+
+                        // set homing speed
+                        nanolibHelper.writeInteger(deviceHandle, 200, odHomingSpeedSwitchSearch, HOMING_SPEED_SWITCH_SEARCH_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, 100, odHomingSpeedZeroSearch, HOMING_SPEED_ZERO_SEARCH_BITS);
+
                         // Software position limit 0x607D ????
                         // Position Range Limit 0x607B ????
                     } else { // Default values for wheel motors
@@ -590,6 +602,9 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_activate(const rclcpp_
 		}
     }
 
+    // TEST THE HOMING
+    // perform_homing();
+
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware on_activate done");
     return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -637,53 +652,120 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_deactivate(const rclcp
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-void MecanumbotHardware::perform_homing(size_t index){
-    int64_t CURRENT_STATUSWORD = 0;
+void MecanumbotHardware::perform_homing() {
 
-    auto deviceHandle = connectedDeviceHandles.at(index);
+    std::vector<size_t> liftIndexes;
 
-    if (!deviceHandle.has_value()) {
-        return;
+    // COLLECT LIFT INDEXES
+    for (size_t i = 0; i < info_.joints.size(); i++)
+    {
+        auto deviceHandle = connectedDeviceHandles.at(i);
+
+        if (!deviceHandle.has_value()) {
+            continue;;
+        }
+
+        if (!is_lift_motor(info_.joints.at(i))) {
+            continue;
+        }
+
+        RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Add to homing list lift motor: %s", info_.joints.at(i).name.c_str());
+
+        liftIndexes.push_back(i);
     }
 
-    if (!is_lift_motor(info_.joints.at(index))) {
-        return;
+    // ENTER HOMING MODE
+    for (auto i : liftIndexes) {
+        auto deviceHandle = connectedDeviceHandles.at(i);
+        // set homing mode in modes of operation
+        nanolibHelper.writeInteger(*deviceHandle, MODE_HOMING, odModesOfOperation, MODES_OF_OPERATION_BITS);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+    
 
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Performing homing for lift motor: %s", info_.joints.at(index).name.c_str());
+    std::vector<size_t> notAtHomeIndexes = liftIndexes;
 
-    // set homing current (mA) treshhold
-    nanolibHelper.writeInteger(*deviceHandle, 200, odHomingCurrentThreshold, HOMING_CURRENT_THRESHOLD_BITS);
+    // CHECK IF WE ARE ALREADY HOME
+    for (auto i : liftIndexes) {
+        auto deviceHandle = connectedDeviceHandles.at(i);
 
-    // set homing method
-    nanolibHelper.writeInteger(*deviceHandle, -17, odHomingMethod, HOMING_METHOD_BITS);
+        int16_t status_word = nanolibHelper.readInteger(*deviceHandle, odStatusWord);
 
-    // set homing speed
-    nanolibHelper.writeInteger(*deviceHandle, 200, odHomingSpeedSwitchSearch, HOMING_SPEED_SWITCH_SEARCH_BITS);
-    nanolibHelper.writeInteger(*deviceHandle, 100, odHomingSpeedZeroSearch, HOMING_SPEED_ZERO_SEARCH_BITS);
-
-    // set homing mode in modes of operation
-    nanolibHelper.writeInteger(*deviceHandle, MODE_HOMING, odModesOfOperation, MODES_OF_OPERATION_BITS);
-
-    // start homing
-    nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR & ~(1<<4), odControlWord, CONTROL_WORD_BITS);
-    nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR | (1<<4), odControlWord, CONTROL_WORD_BITS);
-
-    while ((((CURRENT_STATUSWORD = nanolibHelper.readInteger(*deviceHandle, odStatusWord)) >> 12) & 1) != 1) {
-        RCLCPP_WARN_STREAM(rclcpp::get_logger("MecanumbotHardware"), "Waiting for homing complete: " << ((CURRENT_STATUSWORD >> 12) & 1));
         RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"),
-            "Status word " BYTE_TO_BINARY_PATTERN " " BYTE_TO_BINARY_PATTERN ,
-            BYTE_TO_BINARY(CURRENT_STATUSWORD>>8), BYTE_TO_BINARY(CURRENT_STATUSWORD));
-        
+        " Status word for %s " BYTE_TO_BINARY_PATTERN " " BYTE_TO_BINARY_PATTERN,
+        info_.joints.at(i).name.c_str(),
+        BYTE_TO_BINARY(status_word>>8), BYTE_TO_BINARY(status_word));
+
+        // Check if motor already home
+        // check bit 13, 12 and 10 in status word to see if homing is complete
+        if(((status_word >> 12) & 1) == 1) {
+
+            RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Is already home, removing from list: %s", info_.joints.at(i).name.c_str());
+
+            notAtHomeIndexes.erase(std::remove(notAtHomeIndexes.begin(), notAtHomeIndexes.end(), i), notAtHomeIndexes.end());
+
+        }
+
+    }
+
+    // START HOMING    
+    for (auto i : notAtHomeIndexes)
+    {
+        auto deviceHandle = connectedDeviceHandles.at(i);
+
+        nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR & ~(1<<4), odControlWord, CONTROL_WORD_BITS);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR | (1<<4), odControlWord, CONTROL_WORD_BITS);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    }
+
+    while (notAtHomeIndexes.size() > 0)
+    {
+        std::vector<size_t> reachedHome;
+
+        for (auto i : notAtHomeIndexes)
+        {
+            auto deviceHandle = connectedDeviceHandles.at(i);
+
+            int16_t status_word = nanolibHelper.readInteger(*deviceHandle, odStatusWord);
+
+            RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"),
+            " Status word for %s " BYTE_TO_BINARY_PATTERN " " BYTE_TO_BINARY_PATTERN,
+            info_.joints.at(i).name.c_str(),
+            BYTE_TO_BINARY(status_word>>8), BYTE_TO_BINARY(status_word));
+
+            if(((status_word >> 12) & 1) == 1) {
+                RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing complete: %s", info_.joints.at(i).name.c_str());
+
+                reachedHome.push_back(i);
+            }
+        }
+
+        for (auto i : reachedHome) {
+            notAtHomeIndexes.erase(std::remove(notAtHomeIndexes.begin(), notAtHomeIndexes.end(), i), notAtHomeIndexes.end());
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    nanolibHelper.writeInteger(*deviceHandle, 0, odLiftTargetPosition, TARGET_POSITION_BITS);
-    nanolibHelper.writeInteger(*deviceHandle, MODE_POSITION_PROFILE, odModesOfOperation, MODES_OF_OPERATION_BITS);
+    // SET MODE OF OPERATION TO POSITION PROFILE
+    for (auto i : liftIndexes) {
+        auto deviceHandle = connectedDeviceHandles.at(i);
 
-    nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR & ~(1<<4), odControlWord, CONTROL_WORD_BITS);
-    nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR | (1<<4), odControlWord, CONTROL_WORD_BITS);
-    
+        nanolibHelper.writeInteger(*deviceHandle, 0, odLiftTargetPosition, TARGET_POSITION_BITS);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        nanolibHelper.writeInteger(*deviceHandle, MODE_POSITION_PROFILE, odModesOfOperation, MODES_OF_OPERATION_BITS);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR & ~(1<<4), odControlWord, CONTROL_WORD_BITS);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        nanolibHelper.writeInteger(*deviceHandle, CONTROL_WORD_OPERATION_ENABLED_LIFT_MOTOR | (1<<4), odControlWord, CONTROL_WORD_BITS);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    hardware_gpio_out[0] = 1.0;
+
 }
 
 hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & time, const rclcpp::Duration & period){   
@@ -736,37 +818,15 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
                 // position_states_[i] = lift_positions_to_hight(position);
                 // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Actual position: %d", position);
 
-                int16_t status_word = nanolibHelper.readInteger(*deviceHandle, odStatusWord);
+                // int16_t status_word = nanolibHelper.readInteger(*deviceHandle, odStatusWord);
                 // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"),
                 // " Status word for %s " BYTE_TO_BINARY_PATTERN " " BYTE_TO_BINARY_PATTERN,
                 // info_.joints.at(i).name.c_str(),
                 // BYTE_TO_BINARY(status_word>>8), BYTE_TO_BINARY(status_word));
 
-                // check bit 13, 12 and 10 in status word to see if homing is complete
-                if(((status_word >> 12) & 1) == 1){
-
-                    std::string name = info_.joints.at(i).name;
-                    if (name.find("front") != std::string::npos) {
-                        front_lift_home_ = true;
-                    } else if (name.find("rear") != std::string::npos) {
-                        rear_lift_home_ = true;
-                    }
-
-                    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing complete");
-                    // RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Homing complete %s", info_.joints.at(i).name.c_str());
-                }
-
-
             } catch (const nanolib_exception &e) {
                 RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
             }
-
-            // try{ // read the max motor current
-            //     int32_t max_motor_current = nanolibHelper.readInteger(*deviceHandle, odMaxMotorCurrent);
-            //     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Max motor current for %s: %d", info_.joints.at(i).name, max_motor_current);
-            // } catch (const nanolib_exception &e) {
-            //     RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
-            // }
         } else{                                         // wheel motor interface states
             try{    // read the actual velocity
                 int32_t actual_velocity_ticks = nanolibHelper.readInteger(*deviceHandle, odVelocityActualValue);
@@ -778,10 +838,6 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
         }
 
     }
-
-    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "front/rear %d %d", front_lift_home_, rear_lift_home_);
-
-    hardware_gpio_out[0] = front_lift_home_ && rear_lift_home_;
 
     return hardware_interface::return_type::OK;
 }
@@ -847,25 +903,31 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
             velocity_commands_saved_[i] = velocity_commands_[i];
         }
 
-        // We can only home lift motors
-        // if (is_lift_motor(info_.joints.at(i))) {
-
-        //     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing? %s %f %f", info_.joints.at(i).name.c_str(), hardware_gpio_out[0], hardware_gpio_in[0]);
-
-        //     // check if hardware gpio in changed
-        //     if(hardware_gpio_out[0] != 1.0 && hardware_gpio_in[0] == 1.0){
-        //         RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing requested %s %f %f", info_.joints.at(i).name.c_str(), hardware_gpio_out[0], hardware_gpio_in[0]);
-        //         try{
-        //             RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Performing homing");
-        //             // perform_homing(i);
-        //             RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing done");
-        //         } catch (const nanolib_exception &e) {
-        //             RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
-        //         }
-        //     }
-        // }
-
     }
+
+
+    // We can only home lift motors
+    
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing? %f %f", hardware_gpio_out[0], hardware_gpio_in[0]);
+
+    if (hardware_gpio_out[0] != 1.0 && hardware_gpio_in[0] == 1.0)
+    {
+        RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing requested %f %f", hardware_gpio_out[0], hardware_gpio_in[0]);
+        perform_homing();
+    }
+
+    //     // check if hardware gpio in changed
+    //     if(hardware_gpio_out[0] != 1.0 && hardware_gpio_in[0] == 1.0){
+    //         RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing requested %s %f %f", info_.joints.at(i).name.c_str(), hardware_gpio_out[0], hardware_gpio_in[0]);
+    //         try{
+    //             RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Performing homing");
+    //             // perform_homing(i);
+    //             RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing done");
+    //         } catch (const nanolib_exception &e) {
+    //             RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
+    //         }
+    //     }
+    // }
 
     return hardware_interface::return_type::OK;
 }
