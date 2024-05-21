@@ -63,7 +63,10 @@ namespace debict
                 virtual hardware_interface::return_type write(const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
             private:
-                void perform_homing();
+                void perform_homing(size_t index);
+
+                bool front_lift_home_ = false;
+                bool rear_lift_home_ = false;
 
                 std::vector<size_t> motor_ids_;
                 std::vector<double> position_states_;
@@ -97,6 +100,9 @@ namespace debict
                 const int64_t LIFT_MOTOR_TOP_POSITION = 3600;
                 const int64_t LIFT_MOTOR_BOTTOM_POSITION = 0;
 
+                const int64_t TEMP_OFF = 0x0;
+                const int64_t TEMP_ON = 0x84;
+
                 // read registers
 
                 const nlc::OdIndex odErrorRegister;
@@ -128,20 +134,32 @@ namespace debict
                 const nlc::OdIndex odHomingCurrentThreshold;
                 const unsigned int HOMING_CURRENT_THRESHOLD_BITS = 32;
 
+                const nlc::OdIndex odLiftMaxVelocity;
+                const unsigned int LIFT_MAX_VELOCITY_BITS = 32;
+
+                const nlc::OdIndex odLiftMotorDriveSubmodeSelect;
+                const unsigned int LIFT_MOTOR_DRIVE_SUBMODE_SELECT_BITS = 32;
+
+                const nlc::OdIndex odLiftMotorRatedCurrent;
+                const unsigned int LIFT_MOTOR_RATED_CURRENT_BITS = 32;
+
+                const nlc::OdIndex odLiftMaximumDurationOfMaxCurrent;
+                const unsigned int LIFT_MAXIMUM_DURATION_OF_MAX_CURRENT_BITS = 32;
+
                 const nlc::OdIndex odMaxMotorCurrent;
                 const unsigned int MAX_MOTOR_CURRENT_BITS = 32;
 
-                const nlc::OdIndex odLimitSwitchErrorOptionCode;
-                const unsigned int LIMIT_SWITCH_ERROR_OPTION_CODE_BITS = 16;
+                const nlc::OdIndex odFaultOptionCode;
+                const unsigned int FAULT_OPTION_CODE_BITS = 16;
 
                 const nlc::OdIndex odDigitalInputRouting;
                 const unsigned int DIGITAL_INPUT_ROUTING_BITS = 8;
 
-                const nlc::OdIndex odDigitalInputsControlInterlock;
-                const unsigned int DIGITAL_INPUTS_CONTROL_INTERLOCK_BITS = 32;
+                const nlc::OdIndex odSpecialFunctionEnable;
+                const unsigned int SPECIAL_FUNCTION_ENABLE_BITS = 32;
 
-                const nlc::OdIndex odDigitalInputsControlEnabled;
-                const unsigned int DIGITAL_INPUTS_CONTROL_ENABLED_BITS = 32;
+                const nlc::OdIndex odRoutingEnable;
+                const unsigned int ROUTING_ENABLE_BITS = 32;
 
                 const nlc::OdIndex odControlWord;
                 const unsigned int CONTROL_WORD_BITS = 16;

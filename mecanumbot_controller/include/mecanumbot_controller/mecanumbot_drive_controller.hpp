@@ -109,7 +109,6 @@ namespace debict
                 double wheel_separation_width_;
                 double wheel_separation_length_;
                 bool subscriber_is_active_;
-                bool homing_is_active_;
 
                 double linear_x_target_;
                 double linear_y_target_;

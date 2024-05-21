@@ -30,7 +30,6 @@ MecanumbotDriveController::MecanumbotDriveController()
     , plate_homing_command_ptr_(nullptr)
 {
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Construct MecanumbotDriveController");
-    homing_is_active_ = false;
 }
 
 controller_interface::InterfaceConfiguration MecanumbotDriveController::command_interface_configuration() const
@@ -149,12 +148,9 @@ controller_interface::return_type MecanumbotDriveController::update(const rclcpp
     // TODO: Add the lift motor position here
     auto plate_homing_command = plate_homing_command_ptr_.readFromRT();
     if (plate_homing_command && *plate_homing_command) {
-        if ((*plate_homing_command)->data && !homing_is_active_) {
-            RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate homing command message callback");
-            homing_is_active_ = true;
-            plate_->set_homing(homing_is_active_);
-            return controller_interface::return_type::OK;
-        }
+        bool homing = (*plate_homing_command)->data;
+        // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate homing command message %d", homing);
+        plate_->set_homing(homing);
     }
 
     auto plate_height_command = plate_height_command_ptr_.readFromRT();
@@ -288,7 +284,7 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_activate(cons
     fr_wheel_ = get_wheel(fr_wheel_joint_name_);
     rl_wheel_ = get_wheel(rl_wheel_joint_name_);
     rr_wheel_ = get_wheel(rr_wheel_joint_name_);
-    plate_ = get_plate(plate_front_joint_name_, plate_rear_joint_name_, gpio_inputs_, gpio_inputs_);
+    plate_ = get_plate(plate_front_joint_name_, plate_rear_joint_name_, gpio_inputs_, gpio_outputs_);
 
     if (!fl_wheel_ || !fr_wheel_ || !rl_wheel_ || !rr_wheel_ || !plate_) {
         RCLCPP_ERROR(rclcpp::get_logger("MecanumbotDriveController"), "failed to initialize wheels and/or plate");
