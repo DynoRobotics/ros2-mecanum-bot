@@ -14,6 +14,8 @@ using namespace debict::mecanumbot::controller;
 
 MecanumbotDriveController::MecanumbotDriveController()
     : controller_interface::ControllerInterface()
+    , plate_angle_feedback_publisher_(nullptr)
+    , feedback_timer_(nullptr)
     , velocity_command_subsciption_(nullptr)
     , velocity_command_ptr_(nullptr)
     , plate_height_command_subsciption_(nullptr)
@@ -243,6 +245,8 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
         return controller_interface::CallbackReturn::ERROR;
     }
 
+    plate_angle_feedback_publisher_ = get_node()->create_publisher<Float64>("/plate_tilt_controller/tilt_angle_feedback", rclcpp::SystemDefaultsQoS());
+
     velocity_command_subsciption_ = get_node()->create_subscription<Twist>("/mecanum_controller/cmd_vel_unstamped", rclcpp::SystemDefaultsQoS(), [this](const Twist::SharedPtr twist)
     {
         velocity_command_ptr_.writeFromNonRT(twist);
@@ -265,6 +269,12 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
     {
         // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate homing command message callback");
         plate_homing_command_ptr_.writeFromNonRT(msg);
+    });
+
+    feedback_timer_ = get_node()->create_wall_timer(100ms, [this]() {
+        Float64 msg;
+        msg.data = this->plate_->get_plate_angle_radians();
+        this->plate_angle_feedback_publisher_->publish(msg);
     });
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Configure done for MecanumbotDriveController");
@@ -492,6 +502,7 @@ bool MecanumbotDriveController::reset()
     plate_height_command_subsciption_.reset();
     plate_angle_command_subsciption_.reset();
     plate_homing_command_subsciption_.reset();
+    feedback_timer_.reset();
 
     fl_wheel_.reset();
     fr_wheel_.reset();

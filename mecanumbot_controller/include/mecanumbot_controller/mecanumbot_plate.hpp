@@ -12,6 +12,7 @@ namespace debict
     {
         namespace controller
         {
+
             class MecanumbotPlate
             {
             public:
@@ -57,8 +58,8 @@ namespace debict
                 const double ACTUATOR_SEPARATION_METERS{0.424};
                 const double MAX_PLATE_HEIGHT_METERS; // computed
 
-                const double MAX_HEIGHT_M_PER_S{0.01};
-                const double MAX_ANGLE_RAD_PER_S{1.0 * M_PI / 180.0};
+                const double MAX_HEIGHT_M_PER_S{0.03};
+                const double MAX_ANGLE_RAD_PER_S{4.0 * M_PI / 180.0};
             };
         }
     }

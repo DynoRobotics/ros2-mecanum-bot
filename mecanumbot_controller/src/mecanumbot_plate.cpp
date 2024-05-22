@@ -92,7 +92,7 @@ void MecanumbotPlate::update(double dt)
 
     double safe_plate_angle_radians_target_ = 0.0;
     
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "diff: %f", fabs(actual_height - MAX_PLATE_HEIGHT_METERS));
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "diff: %f", fabs(actual_height - MAX_PLATE_HEIGHT_METERS));
     
     if (fabs(actual_height - MAX_PLATE_HEIGHT_METERS) < 0.01)
     {

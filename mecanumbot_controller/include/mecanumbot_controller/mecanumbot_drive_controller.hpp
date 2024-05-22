@@ -14,6 +14,7 @@
 #include "mecanumbot_controller/mecanumbot_plate.hpp"
 #include "mecanumbot_controller/mecanumbot_wheel.hpp"
 #include "mecanumbot_controller/mecanumbot_controller_compiler.h"
+#include <chrono>
 
 namespace debict
 {
@@ -24,6 +25,7 @@ namespace debict
             using Twist = geometry_msgs::msg::Twist;
             using Float64 = std_msgs::msg::Float64;
             using Bool = std_msgs::msg::Bool;
+            using namespace std::chrono_literals;
 
             class MecanumbotDriveController
                 : public controller_interface::ControllerInterface
@@ -85,6 +87,10 @@ namespace debict
 
                 rclcpp::Subscription<Bool>::SharedPtr plate_homing_command_subsciption_;
                 realtime_tools::RealtimeBuffer<std::shared_ptr<Bool>> plate_homing_command_ptr_;
+
+                rclcpp::Publisher<Float64>::SharedPtr plate_angle_feedback_publisher_;
+
+                rclcpp::TimerBase::SharedPtr feedback_timer_;
 
                 std::shared_ptr<MecanumbotWheel> fl_wheel_;
                 std::shared_ptr<MecanumbotWheel> fr_wheel_;

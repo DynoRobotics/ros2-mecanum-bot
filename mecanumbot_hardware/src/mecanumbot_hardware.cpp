@@ -92,9 +92,9 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_init(const hardware_in
         return baseResult;
     }
 
-    // info_.hardware_parameters are empty for me, seems to be bugged? enp5s0
-    network_interface_name_ = "enp86s0 (Ethernet interface)"; // "enp86s0 (Ethernet interface)"; // info_.hardware_parameters["network_interface_name"];
-    // network_interface_name_ = "eno1 (Ethernet interface)"; // "enp86s0 (Ethernet interface)"; // info_.hardware_parameters["network_interface_name"];
+    // info_.hardware_parameters are empty for me, seems to be bugged? // info_.hardware_parameters["network_interface_name"];
+    network_interface_name_ = "enp86s0 (Ethernet interface)";
+    // network_interface_name_ = "eno1 (Ethernet interface)";
     network_interface_protocol_ = "RESTful API"; // info_.hardware_parameters["network_interface_protocol"];
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Network interface name: '%s'", network_interface_name_.c_str());
@@ -396,11 +396,11 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         nanolibHelper.writeInteger(deviceHandle, max_deceleration, odMaxDeceleration, MAX_DECELERATION_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max deceleration set to %d", max_deceleration);
                         // Max Velocity?
-                        int max_velocity{3000}; // default 30000
+                        int max_velocity{2000}; // default 30000
                         nanolibHelper.writeInteger(deviceHandle, max_velocity, odLiftMaxVelocity, LIFT_MAX_VELOCITY_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max velocity set to %d", max_velocity);
                         // Max motor current
-                        int max_motor_current{6000}; // default 1000 // TODO: Increase this value
+                        int max_motor_current{14000}; // default 1000 // TODO: Increase this value
                         nanolibHelper.writeInteger(deviceHandle, max_motor_current, odMaxMotorCurrent, MAX_MOTOR_CURRENT_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max motor current set to %d", max_motor_current);
 
@@ -440,7 +440,7 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         nanolibHelper.writeInteger(deviceHandle, deceleration_profile, odDecelerationProfile, DECELERATION_PROFILE_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max deceleration profile set to %d", deceleration_profile);
 
-                        int max_motor_current{1000}; // TODO: Increase this value
+                        int max_motor_current{1500}; // TODO: Increase this value
                         nanolibHelper.writeInteger(deviceHandle, max_motor_current, odMaxMotorCurrent, MAX_MOTOR_CURRENT_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max motor current set to %d", max_motor_current);
                     }
