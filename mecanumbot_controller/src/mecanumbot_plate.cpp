@@ -125,10 +125,10 @@ void MecanumbotPlate::update(double dt)
     // ---
     double height_angle_offset = ACTUATOR_SEPARATION_METERS / 2.0 * tan(plate_angle_radians_target_smoothed_);
 
-    double front_height_meters_setpoint = std::max(0.001, std::min(MAX_ACTUATOR_EXTENSION,
+    double front_height_meters_setpoint = std::max(0.004, std::min(MAX_ACTUATOR_EXTENSION,
         plate_height_meters_target_smoothed_ + height_angle_offset
     ));
-    double rear_height_meters_setpoint = std::max(0.001, std::min(MAX_ACTUATOR_EXTENSION,
+    double rear_height_meters_setpoint = std::max(0.004, std::min(MAX_ACTUATOR_EXTENSION,
         plate_height_meters_target_smoothed_ - height_angle_offset
     ));
 

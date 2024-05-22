@@ -419,13 +419,13 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         // HOMING RELATED CONFIG
 
                         // set homing current (mA) treshhold
-                        nanolibHelper.writeInteger(deviceHandle, 300, odHomingCurrentThreshold, HOMING_CURRENT_THRESHOLD_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, 400, odHomingCurrentThreshold, HOMING_CURRENT_THRESHOLD_BITS);
 
                         // set homing method
                         nanolibHelper.writeInteger(deviceHandle, -17, odHomingMethod, HOMING_METHOD_BITS);
 
                         // set homing speed
-                        nanolibHelper.writeInteger(deviceHandle, 150, odHomingSpeedSwitchSearch, HOMING_SPEED_SWITCH_SEARCH_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, 200, odHomingSpeedSwitchSearch, HOMING_SPEED_SWITCH_SEARCH_BITS);
                         nanolibHelper.writeInteger(deviceHandle, 100, odHomingSpeedZeroSearch, HOMING_SPEED_ZERO_SEARCH_BITS);
 
                         // Software position limit 0x607D ????
@@ -689,27 +689,27 @@ void MecanumbotHardware::perform_homing() {
     std::vector<size_t> notAtHomeIndexes = liftIndexes;
 
     // CHECK IF WE ARE ALREADY HOME
-    for (auto i : liftIndexes) {
-        auto deviceHandle = connectedDeviceHandles.at(i);
+    // for (auto i : liftIndexes) {
+    //     auto deviceHandle = connectedDeviceHandles.at(i);
 
-        int16_t status_word = nanolibHelper.readInteger(*deviceHandle, odStatusWord);
+    //     int16_t status_word = nanolibHelper.readInteger(*deviceHandle, odStatusWord);
 
-        RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"),
-        " Status word for %s " BYTE_TO_BINARY_PATTERN " " BYTE_TO_BINARY_PATTERN,
-        info_.joints.at(i).name.c_str(),
-        BYTE_TO_BINARY(status_word>>8), BYTE_TO_BINARY(status_word));
+    //     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"),
+    //     " Status word for %s " BYTE_TO_BINARY_PATTERN " " BYTE_TO_BINARY_PATTERN,
+    //     info_.joints.at(i).name.c_str(),
+    //     BYTE_TO_BINARY(status_word>>8), BYTE_TO_BINARY(status_word));
 
-        // Check if motor already home
-        // check bit 13, 12 and 10 in status word to see if homing is complete
-        if(((status_word >> 12) & 1) == 1) {
+    //     // Check if motor already home
+    //     // check bit 13, 12 and 10 in status word to see if homing is complete
+    //     if(((status_word >> 12) & 1) == 1) {
 
-            RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Is already home, removing from list: %s", info_.joints.at(i).name.c_str());
+    //         RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Is already home, removing from list: %s", info_.joints.at(i).name.c_str());
 
-            notAtHomeIndexes.erase(std::remove(notAtHomeIndexes.begin(), notAtHomeIndexes.end(), i), notAtHomeIndexes.end());
+    //         notAtHomeIndexes.erase(std::remove(notAtHomeIndexes.begin(), notAtHomeIndexes.end(), i), notAtHomeIndexes.end());
 
-        }
+    //     }
 
-    }
+    // }
 
     // START HOMING    
     for (auto i : notAtHomeIndexes)
