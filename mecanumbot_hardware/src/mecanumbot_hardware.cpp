@@ -399,28 +399,34 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         int max_velocity{2000}; // default 30000
                         nanolibHelper.writeInteger(deviceHandle, max_velocity, odLiftMaxVelocity, LIFT_MAX_VELOCITY_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max velocity set to %d", max_velocity);
+                        
+                        
                         // Max motor current
-                        int max_motor_current{14000}; // default 1000 // TODO: Increase this value
+                        int max_motor_current{13000}; // default 1000 // TODO: Increase this value
                         nanolibHelper.writeInteger(deviceHandle, max_motor_current, odMaxMotorCurrent, MAX_MOTOR_CURRENT_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max motor current set to %d", max_motor_current);
 
+                        // write 4200
+                        nanolibHelper.writeInteger(deviceHandle, 4300, odLiftMotorRatedCurrent, LIFT_MOTOR_RATED_CURRENT_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, 100, odLiftMaximumDurationOfMaxCurrent, LIFT_MAXIMUM_DURATION_OF_MAX_CURRENT_BITS);
+
                         // read and log some motor current limits
                         int64_t motor_rated_current = nanolibHelper.readInteger(deviceHandle, odLiftMotorRatedCurrent);
-                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Lift motor rated current: %ld", motor_rated_current);
+                        RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Lift motor rated current: %s %ld", joint_name.c_str(), motor_rated_current);
                         int64_t max_duration_of_max_current = nanolibHelper.readInteger(deviceHandle, odLiftMaximumDurationOfMaxCurrent);
-                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Lift motor max duration of max current: %ld", max_duration_of_max_current);
+                        RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Lift motor max duration of max current: %s %ld", joint_name.c_str(), max_duration_of_max_current);
 
                         // HOMING RELATED CONFIG
 
                         // set homing current (mA) treshhold
-                        nanolibHelper.writeInteger(deviceHandle, 200, odHomingCurrentThreshold, HOMING_CURRENT_THRESHOLD_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, 300, odHomingCurrentThreshold, HOMING_CURRENT_THRESHOLD_BITS);
 
                         // set homing method
                         nanolibHelper.writeInteger(deviceHandle, -17, odHomingMethod, HOMING_METHOD_BITS);
 
                         // set homing speed
-                        nanolibHelper.writeInteger(deviceHandle, 100, odHomingSpeedSwitchSearch, HOMING_SPEED_SWITCH_SEARCH_BITS);
-                        nanolibHelper.writeInteger(deviceHandle, 50, odHomingSpeedZeroSearch, HOMING_SPEED_ZERO_SEARCH_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, 150, odHomingSpeedSwitchSearch, HOMING_SPEED_SWITCH_SEARCH_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, 100, odHomingSpeedZeroSearch, HOMING_SPEED_ZERO_SEARCH_BITS);
 
                         // Software position limit 0x607D ????
                         // Position Range Limit 0x607B ????
