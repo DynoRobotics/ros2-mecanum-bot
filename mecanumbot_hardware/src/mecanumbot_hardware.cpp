@@ -440,7 +440,7 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         nanolibHelper.writeInteger(deviceHandle, deceleration_profile, odDecelerationProfile, DECELERATION_PROFILE_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max deceleration profile set to %d", deceleration_profile);
 
-                        int max_motor_current{500}; // TODO: Increase this value
+                        int max_motor_current{1000}; // TODO: Increase this value
                         nanolibHelper.writeInteger(deviceHandle, max_motor_current, odMaxMotorCurrent, MAX_MOTOR_CURRENT_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max motor current set to %d", max_motor_current);
                     }
