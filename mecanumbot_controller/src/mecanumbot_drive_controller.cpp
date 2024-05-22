@@ -145,7 +145,6 @@ controller_interface::return_type MecanumbotDriveController::update(const rclcpp
     rl_wheel_->set_velocity(rl_wheel_velocity);
     rr_wheel_->set_velocity(rr_wheel_velocity);
 
-    // TODO: Add the lift motor position here
     auto plate_homing_command = plate_homing_command_ptr_.readFromRT();
     if (plate_homing_command && *plate_homing_command) {
         bool homing = (*plate_homing_command)->data;
@@ -251,14 +250,12 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
     });
     last_command_timestamp_ = this->get_node()->now() - rclcpp::Duration(std::chrono::seconds(10));
 
-    // TODO READ UP/DOWN TOPIC FOR LIFT MOTOR
     plate_height_command_subsciption_ = get_node()->create_subscription<Float64>("/plate_lift_controller/trigger_plate", rclcpp::SystemDefaultsQoS(), [this](const Float64::SharedPtr msg)
     {
         // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Plate height command message callback: %f", msg->data);
         plate_height_command_ptr_.writeFromNonRT(msg);
     });
 
-    // TODO READ TILT MOTOR
     plate_angle_command_subsciption_ = get_node()->create_subscription<Float64>("/plate_tilt_controller/tilt_angle", rclcpp::SystemDefaultsQoS(), [this](const Float64::SharedPtr msg)
     {
         plate_angle_command_ptr_.writeFromNonRT(msg);

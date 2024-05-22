@@ -70,16 +70,16 @@ bool is_lift_motor(hardware_interface::ComponentInfo & joint){
 
 // function for converting meters to poses
 // 3600 position per full rotation
-// 3.978mm per full rotation
+// 3.978mm per full rotation (4.356)
 // hight = 0.003978 * positions / 3600
 // -> position = hight / 0.003978 * 3600
 int64_t lift_hight_to_positions(double hight){
-    return hight / 0.003978 * 3600.0;
+    return hight / 0.004356 * 3600.0;
 }
 
 // 
 double lift_positions_to_hight(int64_t positions){
-    return 0.003978 * static_cast<double>(positions) / 3600.0;
+    return 0.004356 * static_cast<double>(positions) / 3600.0;
 }
 
 
@@ -93,8 +93,8 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_init(const hardware_in
     }
 
     // info_.hardware_parameters are empty for me, seems to be bugged? enp5s0
-    // network_interface_name_ = "enp86s0 (Ethernet interface)"; // "enp86s0 (Ethernet interface)"; // info_.hardware_parameters["network_interface_name"];
-    network_interface_name_ = "eno1 (Ethernet interface)"; // "enp86s0 (Ethernet interface)"; // info_.hardware_parameters["network_interface_name"];
+    network_interface_name_ = "enp86s0 (Ethernet interface)"; // "enp86s0 (Ethernet interface)"; // info_.hardware_parameters["network_interface_name"];
+    // network_interface_name_ = "eno1 (Ethernet interface)"; // "enp86s0 (Ethernet interface)"; // info_.hardware_parameters["network_interface_name"];
     network_interface_protocol_ = "RESTful API"; // info_.hardware_parameters["network_interface_protocol"];
 
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Network interface name: '%s'", network_interface_name_.c_str());
@@ -345,9 +345,6 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
 		// Scan the bus for available devices
 		RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Scanning bus for devices...");
 
-        //TODO REMOVE
-        // return hardware_interface::CallbackReturn::SUCCESS;
-
 		std::vector<nlc::DeviceId> deviceIds = nanolibHelper.scanBus(busHwId);
 
 		if (deviceIds.empty()) {
@@ -422,8 +419,8 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         nanolibHelper.writeInteger(deviceHandle, -17, odHomingMethod, HOMING_METHOD_BITS);
 
                         // set homing speed
-                        nanolibHelper.writeInteger(deviceHandle, 200, odHomingSpeedSwitchSearch, HOMING_SPEED_SWITCH_SEARCH_BITS);
-                        nanolibHelper.writeInteger(deviceHandle, 100, odHomingSpeedZeroSearch, HOMING_SPEED_ZERO_SEARCH_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, 100, odHomingSpeedSwitchSearch, HOMING_SPEED_SWITCH_SEARCH_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, 50, odHomingSpeedZeroSearch, HOMING_SPEED_ZERO_SEARCH_BITS);
 
                         // Software position limit 0x607D ????
                         // Position Range Limit 0x607B ????
@@ -809,14 +806,12 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
         if(is_lift_motor(info_.joints.at(i))){          // lift motor interface states
             try{     // read position and set position state
 
-
                 // int32_t target_position = nanolibHelper.readInteger(*deviceHandle, odLiftTargetPosition);
                 // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Target position: %d", target_position);
 
-
-                // int32_t position = nanolibHelper.readInteger(*deviceHandle, odLiftActualPosition);
-                // position_states_[i] = lift_positions_to_hight(position);
-                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Actual position: %d", position);
+                int32_t position = nanolibHelper.readInteger(*deviceHandle, odLiftActualPosition);
+                position_states_[i] = lift_positions_to_hight(position);
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Actual position: %f", position_states_[i]);
 
                 // int16_t status_word = nanolibHelper.readInteger(*deviceHandle, odStatusWord);
                 // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"),
@@ -863,6 +858,11 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
 
         // If lift motor
         if (is_lift_motor(info_.joints.at(i)) && position_commands_[i] != position_commands_saved_[i]){
+            if (hardware_gpio_out[0] != 1.0) {
+                RCLCPP_WARN_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Lift motor not homed, can't move: %s", info_.joints.at(i).name.c_str());
+                continue;
+            }
+
             // Set target position
             // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Try write to lift motor");
             try{
@@ -915,19 +915,6 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
         RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing requested %f %f", hardware_gpio_out[0], hardware_gpio_in[0]);
         perform_homing();
     }
-
-    //     // check if hardware gpio in changed
-    //     if(hardware_gpio_out[0] != 1.0 && hardware_gpio_in[0] == 1.0){
-    //         RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing requested %s %f %f", info_.joints.at(i).name.c_str(), hardware_gpio_out[0], hardware_gpio_in[0]);
-    //         try{
-    //             RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Performing homing");
-    //             // perform_homing(i);
-    //             RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Homing done");
-    //         } catch (const nanolib_exception &e) {
-    //             RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
-    //         }
-    //     }
-    // }
 
     return hardware_interface::return_type::OK;
 }

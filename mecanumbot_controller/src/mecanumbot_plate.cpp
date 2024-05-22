@@ -60,7 +60,6 @@ double MecanumbotPlate::get_plate_angle_radians()
 
 void MecanumbotPlate::update(double dt)
 {
-    // TODO: Maybe add this back if homing state works
     double is_home = hardware_gpio_out_.get().get_value();
     // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Is home value: %f", is_home);
     if (is_home == 0.0)
@@ -92,6 +91,9 @@ void MecanumbotPlate::update(double dt)
     // RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "actual_angle: %f", actual_angle);
 
     double safe_plate_angle_radians_target_ = 0.0;
+    
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotPlate::update"), "diff: %f", fabs(actual_height - MAX_PLATE_HEIGHT_METERS));
+    
     if (fabs(actual_height - MAX_PLATE_HEIGHT_METERS) < 0.01)
     {
         safe_plate_angle_radians_target_ = plate_angle_radians_target_;
@@ -123,10 +125,10 @@ void MecanumbotPlate::update(double dt)
     // ---
     double height_angle_offset = ACTUATOR_SEPARATION_METERS / 2.0 * tan(plate_angle_radians_target_smoothed_);
 
-    double front_height_meters_setpoint = std::max(0.0, std::min(MAX_ACTUATOR_EXTENSION,
+    double front_height_meters_setpoint = std::max(0.001, std::min(MAX_ACTUATOR_EXTENSION,
         plate_height_meters_target_smoothed_ + height_angle_offset
     ));
-    double rear_height_meters_setpoint = std::max(0.0, std::min(MAX_ACTUATOR_EXTENSION,
+    double rear_height_meters_setpoint = std::max(0.001, std::min(MAX_ACTUATOR_EXTENSION,
         plate_height_meters_target_smoothed_ - height_angle_offset
     ));
 
