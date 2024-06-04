@@ -446,37 +446,41 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         nanolibHelper.writeInteger(deviceHandle, deceleration_profile, odDecelerationProfile, DECELERATION_PROFILE_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max deceleration profile set to %d", deceleration_profile);
 
-                        int max_motor_current{1500}; // TODO: Increase this value
+                        int max_motor_current{2*1500}; // TODO: Increase this value
                         nanolibHelper.writeInteger(deviceHandle, max_motor_current, odMaxMotorCurrent, MAX_MOTOR_CURRENT_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max motor current set to %d", max_motor_current);
                     }
 
-                    // Enable hardware emergency stop for both motor types
-                    {
-                        const int64_t asd = (int64_t)0b0; // All special functions are disabled during configuration
-                        nanolibHelper.writeInteger(deviceHandle, asd, odSpecialFunctionEnable, SPECIAL_FUNCTION_ENABLE_BITS);
-                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Digital input control set to Interlock");
-                    }
+                    // do this twice as it seems to never work on the first startup                          
+                    for(size_t i = 0; i < 2; i++){
+                        // Enable hardware emergency stop for both motor types
+                        {
+                            const int64_t asd = (int64_t)0b0; // All special functions are disabled during configuration
+                            nanolibHelper.writeInteger(deviceHandle, asd, odSpecialFunctionEnable, SPECIAL_FUNCTION_ENABLE_BITS);
+                            RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Digital input control set to Interlock");
+                        }
 
-                    // What should happen when we get a fault
-                    nanolibHelper.writeInteger(deviceHandle, 2, odFaultOptionCode, FAULT_OPTION_CODE_BITS);
-                    RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Emergency break mode set to Braking with quick stop ramp");
+                        // What should happen when we get a fault
+                        nanolibHelper.writeInteger(deviceHandle, 2, odFaultOptionCode, FAULT_OPTION_CODE_BITS);
+                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Emergency break mode set to Braking with quick stop ramp");
 
-                    // Route physical input 1 to bit 3 of 60FDh (subindex 4)
-                    {
-                        const int64_t asd = (int64_t)0b0001;
-                        nanolibHelper.writeInteger(deviceHandle, asd, odDigitalInputRouting, DIGITAL_INPUT_ROUTING_BITS);
-                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Digital input routing, digital input 3 set to hardware input 1");
-                    }
+                        // Route physical input 1 to bit 3 of 60FDh (subindex 4)
+                        {
+                            const int64_t asd = (int64_t)0b0001;
+                            nanolibHelper.writeInteger(deviceHandle, asd, odDigitalInputRouting, DIGITAL_INPUT_ROUTING_BITS);
+                            RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Digital input routing, digital input 3 set to hardware input 1");
+                        }
 
-                    // Enable digital input control
-                    nanolibHelper.writeInteger(deviceHandle, 1, odRoutingEnable, ROUTING_ENABLE_BITS);
-                    RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Digital input control Enabled");
+                        // Enable digital input control
+                        nanolibHelper.writeInteger(deviceHandle, 1, odRoutingEnable, ROUTING_ENABLE_BITS);
+                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Digital input control Enabled");
 
-                    {
-                        const int64_t asd = (int64_t)0b1000; // bit 3 is Interlock, we enable it after all configuration is done
-                        nanolibHelper.writeInteger(deviceHandle, asd, odSpecialFunctionEnable, SPECIAL_FUNCTION_ENABLE_BITS);
-                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Digital input control set to Interlock");
+                        {
+                            const int64_t asd = (int64_t)0b1000; // bit 3 is Interlock, we enable it after all configuration is done
+                            nanolibHelper.writeInteger(deviceHandle, asd, odSpecialFunctionEnable, SPECIAL_FUNCTION_ENABLE_BITS);
+                            RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Digital input control set to Interlock");
+                        }
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     }
                 }
             }
