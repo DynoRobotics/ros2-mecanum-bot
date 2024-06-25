@@ -7,6 +7,7 @@
 #include <rclcpp_lifecycle/state.hpp>
 #include <realtime_tools/realtime_buffer.h>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <string>
@@ -89,6 +90,8 @@ namespace debict
                 realtime_tools::RealtimeBuffer<std::shared_ptr<Bool>> plate_homing_command_ptr_;
 
                 rclcpp::Publisher<Float64>::SharedPtr plate_angle_feedback_publisher_;
+
+                rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr wheel_odometry_publisher_;
 
                 rclcpp::TimerBase::SharedPtr feedback_timer_;
 

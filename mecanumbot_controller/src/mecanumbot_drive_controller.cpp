@@ -14,22 +14,23 @@ using namespace debict::mecanumbot::controller;
 
 MecanumbotDriveController::MecanumbotDriveController()
     : controller_interface::ControllerInterface()
-    , plate_angle_feedback_publisher_(nullptr)
-    , feedback_timer_(nullptr)
     , velocity_command_subsciption_(nullptr)
     , velocity_command_ptr_(nullptr)
     , plate_height_command_subsciption_(nullptr)
     , plate_height_command_ptr_(nullptr)
     , plate_angle_command_subsciption_(nullptr)
     , plate_angle_command_ptr_(nullptr)
+    , plate_homing_command_subsciption_(nullptr)
+    , plate_homing_command_ptr_(nullptr)
+    , plate_angle_feedback_publisher_(nullptr)
+    , wheel_odometry_publisher_(nullptr)
+    , feedback_timer_(nullptr)
     , linear_x_target_(0.0)
     , linear_y_target_(0.0)
     , angular_z_target_(0.0)
     , linear_x_smoothed_(0.0)
     , linear_y_smoothed_(0.0)
     , angular_z_smoothed_(0.0)
-    , plate_homing_command_subsciption_(nullptr)
-    , plate_homing_command_ptr_(nullptr)
 {
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Construct MecanumbotDriveController");
 }
@@ -134,6 +135,19 @@ controller_interface::return_type MecanumbotDriveController::update(const rclcpp
     if (std::abs(az) < 1e-3) {
         az = 0.0;
     }
+
+    // Publish as odom lx ly az
+    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "lx: %f, ly: %f, az: %f", lx, ly, az);
+    nav_msgs::msg::Odometry msg = nav_msgs::msg::Odometry();
+    // populate header
+    msg.header.stamp = this->get_node()->now();
+    msg.header.frame_id = "odom";
+    msg.child_frame_id = "base_link";
+    // populate twist
+    msg.twist.twist.linear.x = lx;
+    msg.twist.twist.linear.y = ly;
+    msg.twist.twist.angular.z = az;
+    this->wheel_odometry_publisher_->publish(msg);
 
     // Calculate the wheel velocity
     // See: http://robotsforroboticists.com/drive-kinematics/
@@ -246,6 +260,8 @@ controller_interface::CallbackReturn MecanumbotDriveController::on_configure(con
     }
 
     plate_angle_feedback_publisher_ = get_node()->create_publisher<Float64>("/plate_tilt_controller/tilt_angle_feedback", rclcpp::SystemDefaultsQoS());
+
+    wheel_odometry_publisher_ = get_node()->create_publisher<nav_msgs::msg::Odometry>("/mecanum_controller/odom", rclcpp::SensorDataQoS());
 
     velocity_command_subsciption_ = get_node()->create_subscription<Twist>("/mecanum_controller/cmd_vel_unstamped", rclcpp::SystemDefaultsQoS(), [this](const Twist::SharedPtr twist)
     {
