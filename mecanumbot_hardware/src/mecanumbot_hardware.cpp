@@ -31,34 +31,35 @@ using namespace debict::mecanumbot::hardware;
 
 // Constructor
 MecanumbotHardware::MecanumbotHardware()   
-  : SystemInterface(),
-    odErrorRegister(0x1001, 0x00),
-    odErrorField(0x1003, 0x00),
-    odErrorCode(0x603F, 0x00),
-    odVelocityActualValue(0x6044, 0x00),
-    odLiftActualPosition(0x6064, 0x00),
-    odHomingSpeedSwitchSearch(0x6099, 0x01),
-    odHomingSpeedZeroSearch(0x6099, 0x02),
-    odHomingMethod(0x6098, 0x00),
-    odHomingCurrentThreshold(0x203a, 0x01),
-    odLiftMaxVelocity(0x607F, 0x00),
-    odLiftMotorDriveSubmodeSelect(0x3202, 0x00),
-    odLiftMotorRatedCurrent(0x203B, 0x01),
-    odLiftMaximumDurationOfMaxCurrent(0x203B, 0x02),
-    odMaxMotorCurrent(0x2031, 0x00),
-    odFaultOptionCode(0x605E, 0x00),
-    odDigitalInputRouting(0x3242, 0x04),
-    odSpecialFunctionEnable(0x3240, 0x01),
-    odRoutingEnable(0x3240, 0x08),
-    odControlWord(0x6040, 0x00),
-    odModesOfOperation(0x6060, 0x00),
-    odStatusWord(0x6041, 0x00),
-    odLiftTargetPosition(0x607A, 0x00),
-    odTargetVelocity(0x60FF, 0x00),
-    odMaxAcceleration(0x60C5, 0x00),
-    odMaxDeceleration(0x60C6, 0x00),
-    odAccelerationProfile(0x6083, 0x00),
-    odDecelerationProfile(0x6084, 0x00)
+  : SystemInterface()
+    , odErrorRegister(0x1001, 0x00)
+    , odErrorField(0x1003, 0x00)
+    , odErrorCode(0x603F, 0x00)
+    , odVelocityActualValue(0x6044, 0x00)
+    , odLiftActualPosition(0x6064, 0x00)
+    , odHomingSpeedSwitchSearch(0x6099, 0x01)
+    , odHomingSpeedZeroSearch(0x6099, 0x02)
+    , odHomingMethod(0x6098, 0x00)
+    , odHomingCurrentThreshold(0x203a, 0x01)
+    , odLiftMaxVelocity(0x607F, 0x00)
+    , odLiftMotorDriveSubmodeSelect(0x3202, 0x00)
+    , odLiftMotorRatedCurrent(0x203B, 0x01)
+    , odLiftMaximumDurationOfMaxCurrent(0x203B, 0x02)
+    , odMaxMotorCurrent(0x2031, 0x00)
+    , odFaultOptionCode(0x605E, 0x00)
+    , odDigitalInputRouting(0x3242, 0x04)
+    , odSpecialFunctionEnable(0x3240, 0x01)
+    , odRoutingEnable(0x3240, 0x08)
+    , odControlWord(0x6040, 0x00)
+    , odModesOfOperation(0x6060, 0x00)
+    , odStatusWord(0x6041, 0x00)
+    , odLiftTargetPosition(0x607A, 0x00)
+    , odTargetVelocity(0x60FF, 0x00)
+    , odMaxAcceleration(0x60C5, 0x00)
+    , odMaxDeceleration(0x60C6, 0x00)
+    , odAccelerationProfile(0x6083, 0x00)
+    , odDecelerationProfile(0x6084, 0x00)
+    , odNanoJInputs(0x2410, 0x01)
 {
     RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Mecanumbot hardware constructor");
 }
@@ -388,15 +389,15 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                     // Set default values for lift motor
                     if(is_lift_motor(joint)){
                         // Max acceleration 0x60C5
-                        int max_acceleration{5000}; // default 5000
+                        int max_acceleration{10000}; // default 5000
                         nanolibHelper.writeInteger(deviceHandle, max_acceleration, odMaxAcceleration, MAX_ACCELERATION_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max acceleration set to %d", max_acceleration);
                         // Max deceleration 0x60C6
-                        int max_deceleration{5000}; // default 5000
+                        int max_deceleration{10000}; // default 5000
                         nanolibHelper.writeInteger(deviceHandle, max_deceleration, odMaxDeceleration, MAX_DECELERATION_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max deceleration set to %d", max_deceleration);
                         // Max Velocity?
-                        int max_velocity{2000}; // default 30000
+                        int max_velocity{4000}; // default 30000
                         nanolibHelper.writeInteger(deviceHandle, max_velocity, odLiftMaxVelocity, LIFT_MAX_VELOCITY_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max velocity set to %d", max_velocity);
                         
@@ -857,6 +858,11 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
         return hardware_interface::return_type::OK;
     }
 
+    motor_heartbeat += 1;
+    if (motor_heartbeat > 1000000000) {
+        motor_heartbeat = 0;
+    }
+
     for (size_t i = 0; i < info_.joints.size(); i++) {
         auto deviceHandle = connectedDeviceHandles.at(i);
         // continue;
@@ -864,6 +870,17 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
         if (!deviceHandle.has_value()) {
             // RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Device handle is not set");
             continue;
+        }
+
+        // send heartbeat value to the wheel motor controller as a heartbeat signal
+        // the motor controller contains a NanoJ script that will stop the motor if the heartbeat value is not updated
+        if (!is_lift_motor(info_.joints.at(i))){
+            try{
+                // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Sending heartbeat %d", motor_heartbeat);
+                nanolibHelper.writeInteger(*deviceHandle, motor_heartbeat, odNanoJInputs, NANOJ_INPUTS_BITS);
+            } catch (const nanolib_exception &e) {
+                RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
+            }
         }
 
         // If lift motor
@@ -914,7 +931,6 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
         }
 
     }
-
 
     // We can only home lift motors
     

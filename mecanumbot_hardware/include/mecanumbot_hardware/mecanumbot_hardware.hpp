@@ -97,6 +97,8 @@ namespace debict
                 const int64_t LIFT_MOTOR_TOP_POSITION = 3600;
                 const int64_t LIFT_MOTOR_BOTTOM_POSITION = 0;
 
+                int32_t motor_heartbeat = 0;
+
                 const int64_t TEMP_OFF = 0x0;
                 const int64_t TEMP_ON = 0x84;
 
@@ -184,6 +186,9 @@ namespace debict
 
                 const nlc::OdIndex odDecelerationProfile;
                 const unsigned int DECELERATION_PROFILE_BITS = 32;
+
+                const nlc::OdIndex odNanoJInputs;
+                const unsigned int NANOJ_INPUTS_BITS = 32;
 
             };
         }

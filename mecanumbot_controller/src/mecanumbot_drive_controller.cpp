@@ -137,7 +137,7 @@ controller_interface::return_type MecanumbotDriveController::update(const rclcpp
     }
 
     // Publish as odom lx ly az
-    // RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "lx: %f, ly: %f, az: %f", lx, ly, az);
+    RCLCPP_DEBUG(rclcpp::get_logger("MecanumbotDriveController"), "lx: %f, ly: %f, az: %f", lx, ly, az);
     nav_msgs::msg::Odometry msg = nav_msgs::msg::Odometry();
     // populate header
     msg.header.stamp = this->get_node()->now();
@@ -148,6 +148,12 @@ controller_interface::return_type MecanumbotDriveController::update(const rclcpp
     msg.twist.twist.linear.y = ly;
     msg.twist.twist.angular.z = az;
     this->wheel_odometry_publisher_->publish(msg);
+
+    // scale down the velocity to match the real motors speed
+    float scale = 4.0;
+    lx /= scale;
+    ly /= scale;
+    az /= scale;
 
     // Calculate the wheel velocity
     // See: http://robotsforroboticists.com/drive-kinematics/
