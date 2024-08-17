@@ -53,13 +53,13 @@ namespace debict
                 double plate_height_meters_target_smoothed_{0.0};
                 double plate_angle_radians_target_smoothed_{0.0};
 
-                const double MAX_PLATE_ANGLE_RADIANS{10.0 * M_PI / 180.0};
-                const double MAX_ACTUATOR_EXTENSION{0.068};
+                const double MAX_PLATE_ANGLE_RADIANS{5.0 * M_PI / 180.0}; // 10 degrees was the value
+                const double MAX_ACTUATOR_EXTENSION{0.090};
                 const double ACTUATOR_SEPARATION_METERS{0.424};
                 const double MAX_PLATE_HEIGHT_METERS; // computed
 
-                const double MAX_HEIGHT_M_PER_S{0.03};
-                const double MAX_ANGLE_RAD_PER_S{4.0 * M_PI / 180.0};
+                const double MAX_HEIGHT_M_PER_S{0.03}; // 0.06
+                const double MAX_ANGLE_RAD_PER_S{4.0 * M_PI / 180.0}; // 4.0
             };
         }
     }

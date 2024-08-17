@@ -2,7 +2,7 @@
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <rclcpp/rclcpp.hpp>
-
+#include <rclcpp/utilities.hpp>
 #include "mecanumbot_controller/mecanumbot_drive_controller.hpp"
 
 PLUGINLIB_EXPORT_CLASS(
@@ -50,10 +50,9 @@ controller_interface::InterfaceConfiguration MecanumbotDriveController::command_
     command_interfaces_config.names.push_back(plate_front_joint_name_+ "/" + hardware_interface::HW_IF_POSITION);
     command_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_POSITION);
 
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "GPIO_inputs:  %s", gpio_inputs_.c_str());
-
     command_interfaces_config.names.push_back(gpio_inputs_ + "/homing_command");
 
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Returning command interfaces");
     return command_interfaces_config;
 }
 
@@ -78,10 +77,9 @@ controller_interface::InterfaceConfiguration MecanumbotDriveController::state_in
     state_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_POSITION);
     state_interfaces_config.names.push_back(plate_rear_joint_name_ + "/" + hardware_interface::HW_IF_VELOCITY);
 
-    RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "GPIO_outputs:  %s", gpio_outputs_.c_str());
-
     state_interfaces_config.names.push_back(gpio_outputs_ + "/homing_state");
 
+    RCLCPP_INFO(rclcpp::get_logger("MecanumbotDriveController"), "Returning state interfaces");
     return state_interfaces_config;
 }
 

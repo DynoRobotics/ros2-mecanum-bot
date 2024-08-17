@@ -43,6 +43,7 @@ MecanumbotHardware::MecanumbotHardware()
     , odHomingCurrentThreshold(0x203a, 0x01)
     , odLiftMaxVelocity(0x607F, 0x00)
     , odLiftMotorDriveSubmodeSelect(0x3202, 0x00)
+    , odLiftMotorPolarity(0x607E, 0x00)
     , odLiftMotorRatedCurrent(0x203B, 0x01)
     , odLiftMaximumDurationOfMaxCurrent(0x203B, 0x02)
     , odMaxMotorCurrent(0x2031, 0x00)
@@ -72,15 +73,19 @@ bool is_lift_motor(hardware_interface::ComponentInfo & joint){
 // function for converting meters to poses
 // 3600 position per full rotation
 // 3.978mm per full rotation (4.356)
-// hight = 0.003978 * positions / 3600
-// -> position = hight / 0.003978 * 3600
+// hight = 0.00798 * positions / 3600 // METERS_PER_ROTATION was 0.003978
+// -> position = hight / 0.00798 * 3600
 int64_t lift_hight_to_positions(double hight){
-    return hight / 0.004356 * 3600.0;
+    return hight / METERS_PER_ROTATION * 3600.0; // Height (m) / METERS_PER_ROTATION (m/rot) * (positions / rot) = positions
 }
 
-// 
+// 110 mm is the desired height
+// we get about 7.8 mm per rotation of the shaft of the motor
+// This is considering the geat rotations. 
+// 3600 positions per full rotation. 
+// so (3600 * 110/7.8)
 double lift_positions_to_hight(int64_t positions){
-    return 0.004356 * static_cast<double>(positions) / 3600.0;
+    return METERS_PER_ROTATION * static_cast<double>(positions) / 3600.0;
 }
 
 
@@ -397,13 +402,20 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         nanolibHelper.writeInteger(deviceHandle, max_deceleration, odMaxDeceleration, MAX_DECELERATION_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max deceleration set to %d", max_deceleration);
                         // Max Velocity?
-                        int max_velocity{4000}; // default 30000
+                        int max_velocity{2000}; // default 30000 // 4000
                         nanolibHelper.writeInteger(deviceHandle, max_velocity, odLiftMaxVelocity, LIFT_MAX_VELOCITY_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max velocity set to %d", max_velocity);
-                        
-                        
+
+                        // Velocity direction: (0100 0000 = 40h) value on register 0x607E will reverse the polarity 
+                        // nanolibHelper.writeBytes(deviceHandle, velocity_direction, odLiftMotorPolarity);
+
+                        int polarity_value{1 << 7}; // default 30000
+                        nanolibHelper.writeInteger(deviceHandle, polarity_value, odLiftMotorPolarity, 8);
+                        RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max velocity set to %d", max_velocity);
+
+
                         // Max motor current
-                        int max_motor_current{13000}; // default 1000 // TODO: Increase this value
+                        int max_motor_current{6000}; // default 1000 // TODO: Increase this value // 13000
                         nanolibHelper.writeInteger(deviceHandle, max_motor_current, odMaxMotorCurrent, MAX_MOTOR_CURRENT_BITS);
                         RCLCPP_INFO_ONCE(rclcpp::get_logger("MecanumbotHardware"), "Max motor current set to %d", max_motor_current);
 
@@ -420,14 +432,14 @@ hardware_interface::CallbackReturn MecanumbotHardware::on_configure(const rclcpp
                         // HOMING RELATED CONFIG
 
                         // set homing current (mA) treshhold
-                        nanolibHelper.writeInteger(deviceHandle, 400, odHomingCurrentThreshold, HOMING_CURRENT_THRESHOLD_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, 400, odHomingCurrentThreshold, HOMING_CURRENT_THRESHOLD_BITS); // 400
 
                         // set homing method
-                        nanolibHelper.writeInteger(deviceHandle, -17, odHomingMethod, HOMING_METHOD_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, -18, odHomingMethod, HOMING_METHOD_BITS);
 
                         // set homing speed
-                        nanolibHelper.writeInteger(deviceHandle, 200, odHomingSpeedSwitchSearch, HOMING_SPEED_SWITCH_SEARCH_BITS);
-                        nanolibHelper.writeInteger(deviceHandle, 100, odHomingSpeedZeroSearch, HOMING_SPEED_ZERO_SEARCH_BITS);
+                        nanolibHelper.writeInteger(deviceHandle, 100, odHomingSpeedSwitchSearch, HOMING_SPEED_SWITCH_SEARCH_BITS); // 200
+                        nanolibHelper.writeInteger(deviceHandle, 100, odHomingSpeedZeroSearch, HOMING_SPEED_ZERO_SEARCH_BITS);  // 100
 
                         // Software position limit 0x607D ????
                         // Position Range Limit 0x607B ????
@@ -802,7 +814,7 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
         try{
             error = nanolibHelper.readInteger(*deviceHandle, odErrorRegister);
         } catch (const nanolib_exception &e) {
-            RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), " %s: %s", info_.joints.at(i).name.c_str(), e.what());
+            RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), " Read error register failed - %s: %s", info_.joints.at(i).name.c_str(), e.what());
         }
 
         if(error != 0){
@@ -820,7 +832,8 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
                 // int32_t target_position = nanolibHelper.readInteger(*deviceHandle, odLiftTargetPosition);
                 // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Target position: %d", target_position);
 
-                int32_t position = nanolibHelper.readInteger(*deviceHandle, odLiftActualPosition);
+                // Changed sign due to changed polarity
+                int32_t position = -1 * nanolibHelper.readInteger(*deviceHandle, odLiftActualPosition);
                 position_states_[i] = lift_positions_to_hight(position);
                 // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Actual position: %f", position_states_[i]);
 
@@ -839,7 +852,7 @@ hardware_interface::return_type MecanumbotHardware::read(const rclcpp::Time & ti
                 double actual_velocity_radians_per_second = actual_velocity_ticks / 572.957795131;
                 velocity_states_[i] = actual_velocity_radians_per_second;
             } catch (const nanolib_exception &e) {
-                RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
+                RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), " Read velocity feedback failed - %s: %s", info_.joints.at(i).name.c_str(), e.what());
             }
         }
 
@@ -879,7 +892,7 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
                 // RCLCPP_INFO(rclcpp::get_logger("MecanumbotHardware"), "Sending heartbeat %d", motor_heartbeat);
                 nanolibHelper.writeInteger(*deviceHandle, motor_heartbeat, odNanoJInputs, NANOJ_INPUTS_BITS);
             } catch (const nanolib_exception &e) {
-                RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
+                RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), "Heartbeat signal failed %s: %s", info_.joints.at(i).name.c_str(), e.what());
             }
         }
 
@@ -923,7 +936,7 @@ hardware_interface::return_type MecanumbotHardware::write(const rclcpp::Time & t
                 }
                 nanolibHelper.writeInteger(*deviceHandle, (int32_t)(v*572.957795131), odTargetVelocity, TARGET_VELOCITY_BITS);
             } catch (const nanolib_exception &e) {
-                RCLCPP_ERROR(rclcpp::get_logger("MecanumbotHardware"), e.what());
+                RCLCPP_WARN(rclcpp::get_logger("MecanumbotHardware"), " Write volocity failed - %s: %s", info_.joints.at(i).name.c_str(), e.what());
             }
 
             // Store the current velocity

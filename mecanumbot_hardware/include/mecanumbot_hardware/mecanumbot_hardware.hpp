@@ -13,6 +13,9 @@
 #include "mecanumbot_hardware/mecanumbot_hardware_compiler.h"
 #include "mecanumbot_hardware/nanolib_helper.hpp"
 
+const double METERS_PER_ROTATION = 0.000501 * 2.5 * 1.48; // = 0.0018537
+// const double METERS_PER_ROTATION = 0.002;
+
 namespace debict
 {
     namespace mecanumbot
@@ -138,6 +141,9 @@ namespace debict
 
                 const nlc::OdIndex odLiftMotorDriveSubmodeSelect;
                 const unsigned int LIFT_MOTOR_DRIVE_SUBMODE_SELECT_BITS = 32;
+
+                const nlc::OdIndex odLiftMotorPolarity;
+                const unsigned int LIFT_MOTOR_POLARITY_BITS = 8;
 
                 const nlc::OdIndex odLiftMotorRatedCurrent;
                 const unsigned int LIFT_MOTOR_RATED_CURRENT_BITS = 32;

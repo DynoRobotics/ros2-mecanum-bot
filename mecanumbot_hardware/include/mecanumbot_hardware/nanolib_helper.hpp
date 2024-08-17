@@ -132,6 +132,19 @@ public:
 	int64_t readInteger(const nlc::DeviceHandle &deviceId, const nlc::OdIndex &odIndex) const;
 
 	/**
+	 * @brief Writes arbitrary bytes (domain object data) to the controllers object dictionary
+	 *
+	 * @param DeviceHandle The device to write to
+	 * @param data Byte vector, array of bytes
+	 * @param odIndex The index/sub-index to write to
+	 *
+	 * @result ResultVoid
+	 */
+	void writeBytes(const nlc::DeviceHandle deviceHandle,
+					const std::vector<uint8_t> &data,
+				 	const nlc::OdIndex odIndex) const;
+
+	/**
 	 * @brief Writes given value to the device
 	 *
 	 * @param deviceId The id of the device to write to

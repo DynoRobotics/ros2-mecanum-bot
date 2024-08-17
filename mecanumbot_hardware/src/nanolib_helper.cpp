@@ -123,6 +123,12 @@ void NanoLibHelper::writeInteger(const nlc::DeviceHandle &deviceId, int64_t valu
 	checkResult("writeNumber", nanolibAccessor->writeNumber(deviceId, value, odIndex, bitLength));
 }
 
+void NanoLibHelper::writeBytes(const nlc::DeviceHandle deviceHandle,
+							   const std::vector<uint8_t> &data,
+							   const nlc::OdIndex odIndex) const {
+	checkResult("writeBytes", nanolibAccessor->writeBytes(deviceHandle, data, odIndex));
+}
+
 std::vector<std::int64_t> NanoLibHelper::readArray(const nlc::DeviceHandle &deviceId,
 												   const uint16_t odIndex) const {
 	return checkedResult("readNumberArray", nanolibAccessor->readNumberArray(deviceId, odIndex)).getResult();
