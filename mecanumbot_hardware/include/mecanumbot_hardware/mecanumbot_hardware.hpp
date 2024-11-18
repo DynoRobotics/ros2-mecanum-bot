@@ -13,8 +13,8 @@
 #include "mecanumbot_hardware/mecanumbot_hardware_compiler.h"
 #include "mecanumbot_hardware/nanolib_helper.hpp"
 
-const double METERS_PER_ROTATION = 0.000501 * 2.5 * 1.48; // = 0.0018537
-// const double METERS_PER_ROTATION = 0.002;
+// const double METERS_PER_ROTATION = 0.000501 * 2.5 * 1.48; // = 0.0018537 new mechanism
+const double METERS_PER_ROTATION = 0.004356;              // = 0.004356 old mechanism
 
 namespace debict
 {
